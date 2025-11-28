@@ -1,0 +1,47 @@
+name: gem_game
+description: "A colorful match-3 puzzle game"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Sound effects and music
+  audioplayers: ^6.1.0
+
+  # Persistent storage for high scores and settings
+  shared_preferences: ^2.3.3
+
+  # Haptic feedback
+  vibration: ^2.0.0
+
+  # App info for version display
+  package_info_plus: ^8.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^4.0.0
+
+  # Icon generator
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
+
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon.png"
+  adaptive_icon_background: "#1a1a2e"
+  adaptive_icon_foreground: "assets/icon.png"
