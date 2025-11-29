@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/game_mode.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/starfield_background.dart';
@@ -159,15 +160,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     // About
                     _buildSectionHeader('About'),
-                    _buildInfoTile(
+                    _buildTappableInfoTile(
                       Icons.code,
                       'Open Source',
-                      'Free and open source - no ads, no tracking',
+                      'View source code on GitHub',
+                      () => _launchUrl('https://github.com/Positronic-AI/gems'),
                     ),
                     _buildInfoTile(
                       Icons.favorite,
                       'Made with Flutter',
                       'Built with love using Flutter',
+                    ),
+                    _buildInfoTile(
+                      Icons.block,
+                      'No Ads, No Tracking',
+                      'Your privacy is respected',
                     ),
 
                     const SizedBox(height: 32),
@@ -341,5 +348,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: TextStyle(color: Colors.grey.shade400),
       ),
     );
+  }
+
+  Widget _buildTappableInfoTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.purple.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: Colors.purple.shade300),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: Colors.grey.shade400),
+      ),
+      trailing: Icon(
+        Icons.open_in_new,
+        color: Colors.grey.shade500,
+        size: 18,
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }
