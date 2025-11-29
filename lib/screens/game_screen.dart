@@ -210,6 +210,17 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
+  Future<bool> _handleBackPressed() async {
+    // For Zen mode, automatically go to game over screen to save score
+    if (_currentMode.type == GameModeType.zen && _displayScore > 0) {
+      _endGame();
+      return false; // Don't pop - _endGame handles navigation
+    }
+
+    // For other modes, just exit
+    return true;
+  }
+
   void _resetGame() {
     showDialog(
       context: context,
@@ -240,8 +251,17 @@ class _GameScreenState extends State<GameScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: StarfieldBackground(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _handleBackPressed();
+        if (shouldPop && mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        body: StarfieldBackground(
         child: SafeArea(
           child: Column(
             children: [
@@ -291,6 +311,7 @@ class _GameScreenState extends State<GameScreen>
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -305,7 +326,12 @@ class _GameScreenState extends State<GameScreen>
           Row(
             children: [
               IconButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () async {
+                  final shouldPop = await _handleBackPressed();
+                  if (shouldPop && mounted) {
+                    Navigator.pop(context);
+                  }
+                },
                 icon: const Icon(Icons.arrow_back),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.white.withOpacity(0.1),

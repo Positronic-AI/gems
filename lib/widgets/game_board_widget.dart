@@ -35,8 +35,8 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
   final Set<Position> _animatingPositions = {};
 
   // Pinch to zoom
-  double _baseScale = 1.0;
   double _currentScale = 1.0;
+  double _scaleAtLastSizeChange = 1.0;
   bool _isScaling = false;
 
   // Swipe detection - track drag distance
@@ -182,22 +182,23 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
 
         gems.add(
           AnimatedPositioned(
+            key: ValueKey(gem.id), // Track each gem by its unique ID
             duration: shouldAnimate
-                ? const Duration(milliseconds: 200)
+                ? const Duration(milliseconds: 170)
                 : Duration.zero,
-            curve: Curves.easeOut,
+            curve: Curves.easeInQuad, // Accelerate like real falling
             left: col * gemSize + offset.dx,
             top: row * gemSize + offset.dy,
             width: gemSize,
             height: gemSize,
             child: AnimatedScale(
               duration: shouldAnimate
-                  ? const Duration(milliseconds: 150)
+                  ? const Duration(milliseconds: 90)
                   : Duration.zero,
               scale: scale,
               child: AnimatedOpacity(
                 duration: shouldAnimate
-                    ? const Duration(milliseconds: 150)
+                    ? const Duration(milliseconds: 90)
                     : Duration.zero,
                 opacity: opacity,
                 child: GemWidget(
@@ -223,8 +224,9 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
 
   void _onScaleStart(ScaleStartDetails details) {
     if (details.pointerCount == 2) {
-      // Two finger pinch
-      _baseScale = _currentScale;
+      // Two finger pinch - reset tracking for new gesture
+      _currentScale = 1.0;
+      _scaleAtLastSizeChange = 1.0;
       _isScaling = true;
       setState(() {});
     } else if (details.pointerCount == 1 && !_isAnimating) {
@@ -243,20 +245,20 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
     if (_isScaling && details.pointerCount == 2) {
-      _currentScale = _baseScale * details.scale;
+      _currentScale = details.scale;
 
-      // Calculate new size based on scale
+      // Calculate scale change relative to last size change
       // Pinch out (scale > 1) = smaller grid (fewer, bigger gems)
       // Pinch in (scale < 1) = larger grid (more, smaller gems)
-      final scaleDelta = details.scale;
+      final scaleDelta = _currentScale / _scaleAtLastSizeChange;
       int newSize = widget.board.rows;
 
       if (scaleDelta > 1.15) {
         newSize = widget.board.rows - 1;
-        _baseScale = _currentScale;
+        _scaleAtLastSizeChange = _currentScale;
       } else if (scaleDelta < 0.85) {
         newSize = widget.board.rows + 1;
-        _baseScale = _currentScale;
+        _scaleAtLastSizeChange = _currentScale;
       }
 
       newSize = newSize.clamp(GameBoard.minSize, GameBoard.maxSize);
@@ -322,7 +324,7 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     if (_isScaling) {
       _isScaling = false;
       _currentScale = 1.0;
-      _baseScale = 1.0;
+      _scaleAtLastSizeChange = 1.0;
       setState(() {});
       return;
     }
@@ -490,27 +492,27 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     final gemSize = _gemSize;
 
     while (matches.isNotEmpty) {
-      // Track matched positions for animation
+      // Track matched positions for animation - gentle highlight
       _animatingPositions.clear();
       for (final match in matches) {
         for (final pos in match.positions) {
           _animatingPositions.add(pos);
-          _gemScales[pos] = 1.2;
-          _gemOpacities[pos] = 0.5;
+          _gemScales[pos] = 1.05; // Subtle scale, less jarring
+          _gemOpacities[pos] = 0.8; // Keep mostly visible
         }
       }
       setState(() {});
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future.delayed(const Duration(milliseconds: 60));
 
-      // Fade out matched gems
+      // Fade out matched gems smoothly
       for (final match in matches) {
         for (final pos in match.positions) {
-          _gemScales[pos] = 0.0;
+          _gemScales[pos] = 0.8; // Shrink instead of pop
           _gemOpacities[pos] = 0.0;
         }
       }
       setState(() {});
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 90));
 
       // Remove matches and update score
       final points = widget.board.removeMatches(matches);
@@ -537,20 +539,20 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
       // Show gems at their old positions (via offset)
       setState(() {});
 
-      // Small delay then animate to new positions
-      await Future.delayed(const Duration(milliseconds: 16));
+      // Pause to let users see the gap before gems fall
+      await Future.delayed(const Duration(milliseconds: 50));
 
       // Clear offsets to animate gems sliding down
       for (final pos in _animatingPositions) {
         _gemOffsets[pos] = Offset.zero;
       }
       setState(() {});
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 170));
 
       // Fill empty spaces and get new gem data
       final newGems = widget.board.fillEmptySpaces();
 
-      // Set up offsets for new gems coming from above
+      // Set up new gems to pop in with scale animation
       _gemOffsets.clear();
       _animatingPositions.clear();
       for (final col in newGems.keys) {
@@ -558,22 +560,22 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
         // New gems fill from row 0 down to row count-1
         for (int row = 0; row < count; row++) {
           final pos = Position(row, col);
-          // Start above the board
-          _gemOffsets[pos] = Offset(0, -(count - row) * gemSize);
+          // Start scaled to 0 (invisible) at final position
+          _gemScales[pos] = 0.0;
           _animatingPositions.add(pos);
         }
       }
 
-      // Show new gems above the board
+      // Show gems at scale 0
       setState(() {});
-      await Future.delayed(const Duration(milliseconds: 16));
+      await Future.delayed(const Duration(milliseconds: 20));
 
-      // Animate new gems sliding down into place
+      // Animate new gems popping in
       for (final pos in _animatingPositions) {
-        _gemOffsets[pos] = Offset.zero;
+        _gemScales[pos] = 1.0;
       }
       setState(() {});
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 110));
 
       _gemOffsets.clear();
 

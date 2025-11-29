@@ -27,7 +27,7 @@ android {
 
     defaultConfig {
         applicationId = "ai.positronic.gem_game"
-        minSdk = 22
+        minSdkVersion = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -48,6 +48,12 @@ android {
         }
         debug {
             debuggable = true
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 }

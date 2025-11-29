@@ -2,10 +2,10 @@ name: gem_game
 description: "A colorful match-3 puzzle game"
 publish_to: 'none'
 
-version: 1.0.0+3
+version: 1.0.0+6
 
 environment:
-  sdk: ^3.5.4
+  sdk: ^3.10.0
 
 dependencies:
   flutter:
