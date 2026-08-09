@@ -282,7 +282,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       Text(
-                        '${score.gridSize}x${score.gridSize}',
+                        score.seed != null
+                            ? '${score.gridSize}x${score.gridSize} · s${score.seed}'
+                            : '${score.gridSize}x${score.gridSize}',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 12,

@@ -9,10 +9,12 @@ import 'game_over_screen.dart';
 
 class GameScreen extends StatefulWidget {
   final GameMode mode;
+  final int? seed; // null = random; set = reproducible board + refills
 
   const GameScreen({
     super.key,
     required this.mode,
+    this.seed,
   });
 
   @override
@@ -20,7 +22,7 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late GameBoard _board;
   late GameMode _currentMode;
   int _displayScore = 0;
@@ -37,6 +39,15 @@ class _GameScreenState extends State<GameScreen>
   // Moves mode
   int _movesRemaining = 0;
 
+  // Power-up fanfare
+  String? _powerUpMessage;
+
+  // Debug mode
+  int _debugTapCount = 0;
+  late AnimationController _powerUpAnimController;
+  late Animation<double> _powerUpScaleAnimation;
+  late Animation<double> _powerUpOpacityAnimation;
+
   late AnimationController _scoreAnimController;
   late Animation<double> _scorePulseAnimation;
 
@@ -44,7 +55,7 @@ class _GameScreenState extends State<GameScreen>
   void initState() {
     super.initState();
     _currentMode = widget.mode;
-    _board = GameBoard();
+    _board = GameBoard(seed: widget.seed);
     _initializeMode();
 
     _scoreAnimController = AnimationController(
@@ -59,6 +70,36 @@ class _GameScreenState extends State<GameScreen>
     _scoreAnimController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         _scoreAnimController.reverse();
+      }
+    });
+
+    // Power-up animation
+    _powerUpAnimController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
+    _powerUpScaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.3), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 1.3, end: 1.0), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
+    ]).animate(CurvedAnimation(
+      parent: _powerUpAnimController,
+      curve: Curves.easeOut,
+    ));
+
+    _powerUpOpacityAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 15),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.0), weight: 65),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 20),
+    ]).animate(_powerUpAnimController);
+
+    _powerUpAnimController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _powerUpMessage = null;
+        });
       }
     });
   }
@@ -96,7 +137,15 @@ class _GameScreenState extends State<GameScreen>
   void dispose() {
     _timer?.cancel();
     _scoreAnimController.dispose();
+    _powerUpAnimController.dispose();
     super.dispose();
+  }
+
+  void _onPowerUp(String message) {
+    setState(() {
+      _powerUpMessage = message;
+    });
+    // Power-up message will be shown in the combo celebration instead
   }
 
   void _onScoreUpdate(int points, int combo) {
@@ -121,8 +170,24 @@ class _GameScreenState extends State<GameScreen>
     if (mounted) {
       setState(() {
         _showCelebration = false;
+        _powerUpMessage = null; // Clear power-up message after celebration
       });
     }
+  }
+
+  void _triggerDebugNotification() {
+    _debugTapCount++;
+    final testCases = [
+      () => _onScoreUpdate(150, 1),  // Basic combo - "NICE!"
+      () => _onScoreUpdate(300, 2),  // 2x combo - "GREAT!"
+      () => _onScoreUpdate(500, 3),  // 3x combo - "FANTASTIC!"
+      () => _onScoreUpdate(800, 4),  // 4x combo - "AMAZING!"
+      () => _onScoreUpdate(1200, 5), // 5x combo - "INCREDIBLE!"
+      () { _onPowerUp('LINE BOMB'); _onScoreUpdate(200, 1); },
+      () { _onPowerUp('RADIAL BOMB'); _onScoreUpdate(300, 2); },
+      () { _onPowerUp('COLOR BOMB'); _onScoreUpdate(500, 3); },
+    ];
+    testCases[_debugTapCount % testCases.length]();
   }
 
   void _onMoveComplete() {
@@ -181,12 +246,15 @@ class _GameScreenState extends State<GameScreen>
           mode: _currentMode,
           score: _displayScore,
           gridSize: _board.rows,
+          seed: _board.seed,
           won: won,
           onPlayAgain: () {
+            // Same seed: "play again" is a rematch on the same board.
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => GameScreen(mode: widget.mode),
+                builder: (context) =>
+                    GameScreen(mode: widget.mode, seed: _board.seed),
               ),
             );
           },
@@ -268,20 +336,36 @@ class _GameScreenState extends State<GameScreen>
               // Header with score and mode info
               _buildHeader(),
 
+              // Seed — quiet but present; this exact game's identity
+              Text(
+                'seed ${_board.seed}',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withOpacity(0.35),
+                  letterSpacing: 1,
+                ),
+              ),
+
               // Mode-specific display (timer, moves, target)
               _buildModeDisplay(),
 
               // Celebration area - fixed height so board doesn't jump
               SizedBox(
                 height: 80,
-                child: _showCelebration
-                    ? ComboCelebration(
+                width: double.infinity,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    if (_showCelebration)
+                      ComboCelebration(
                         key: ValueKey(_celebrationKey),
                         combo: _lastCombo,
                         points: _lastPoints,
+                        customText: _powerUpMessage,
                         onComplete: _onCelebrationComplete,
-                      )
-                    : null,
+                      ),
+                  ],
+                ),
               ),
 
               // Game board
@@ -293,6 +377,7 @@ class _GameScreenState extends State<GameScreen>
                     onNoMoves: _onNoMoves,
                     onSizeChange: _onSizeChange,
                     onMoveComplete: _onMoveComplete,
+                    onPowerUp: _onPowerUp,
                   ),
                 ),
               ),
@@ -399,16 +484,19 @@ class _GameScreenState extends State<GameScreen>
             },
           ),
 
-          // Mode indicator
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              _currentMode.type.icon,
-              style: const TextStyle(fontSize: 24),
+          // Mode indicator (tap to test notifications in debug)
+          GestureDetector(
+            onTap: _triggerDebugNotification,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                _currentMode.type.icon,
+                style: const TextStyle(fontSize: 24),
+              ),
             ),
           ),
         ],

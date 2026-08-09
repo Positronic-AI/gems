@@ -1,30 +1,41 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:gem_game/main.dart';
+import 'package:gem_game/models/game_board.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('same seed produces the same board', () {
+    final a = GameBoard(size: 8, seed: 424242);
+    final b = GameBoard(size: 8, seed: 424242);
+    for (var r = 0; r < 8; r++) {
+      for (var c = 0; c < 8; c++) {
+        expect(a.grid[r][c]!.type, b.grid[r][c]!.type,
+            reason: 'mismatch at $r,$c');
+      }
+    }
+    expect(a.seed, 424242);
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  test('reset replays the same board', () {
+    final board = GameBoard(size: 6, seed: 777);
+    final original = [
+      for (var r = 0; r < 6; r++) [for (var c = 0; c < 6; c++) board.grid[r][c]!.type]
+    ];
+    board.reset();
+    for (var r = 0; r < 6; r++) {
+      for (var c = 0; c < 6; c++) {
+        expect(board.grid[r][c]!.type, original[r][c]);
+      }
+    }
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  test('different seeds differ', () {
+    final a = GameBoard(size: 8, seed: 1);
+    final b = GameBoard(size: 8, seed: 2);
+    var same = true;
+    for (var r = 0; r < 8 && same; r++) {
+      for (var c = 0; c < 8; c++) {
+        if (a.grid[r][c]!.type != b.grid[r][c]!.type) { same = false; break; }
+      }
+    }
+    expect(same, false);
   });
 }

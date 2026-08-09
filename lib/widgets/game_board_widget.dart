@@ -9,6 +9,7 @@ class GameBoardWidget extends StatefulWidget {
   final VoidCallback? onNoMoves;
   final Function(int newSize)? onSizeChange;
   final VoidCallback? onMoveComplete;
+  final Function(String message)? onPowerUp;
 
   const GameBoardWidget({
     super.key,
@@ -17,6 +18,7 @@ class GameBoardWidget extends StatefulWidget {
     this.onNoMoves,
     this.onSizeChange,
     this.onMoveComplete,
+    this.onPowerUp,
   });
 
   @override
@@ -394,6 +396,14 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
   void _onGemTap(Position pos) {
     if (_isAnimating || _isScaling) return;
 
+    final gem = widget.board.getGem(pos.row, pos.col);
+
+    // Tap-to-activate power-ups (except color bomb which needs a target)
+    if (gem != null && gem.hasPowerUp && gem.powerUp != PowerUpType.colorBomb) {
+      _activatePowerUpByTap(pos);
+      return;
+    }
+
     if (_selectedPosition == null) {
       setState(() {
         _selectedPosition = pos;
@@ -411,6 +421,108 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     }
   }
 
+  /// Activate a power-up gem by tapping it directly
+  Future<void> _activatePowerUpByTap(Position pos) async {
+    final gem = widget.board.getGem(pos.row, pos.col);
+    if (gem == null || !gem.hasPowerUp) return;
+
+    setState(() {
+      _isAnimating = true;
+      _selectedPosition = null;
+    });
+
+    // Get positions to clear based on power-up type
+    Set<Position> clearPositions = {};
+    String message = 'BOOM!';
+
+    switch (gem.powerUp) {
+      case PowerUpType.lineHorizontal:
+        for (int col = 0; col < widget.board.cols; col++) {
+          clearPositions.add(Position(pos.row, col));
+        }
+        message = 'LINE BLAST!';
+        break;
+      case PowerUpType.lineVertical:
+        for (int row = 0; row < widget.board.rows; row++) {
+          clearPositions.add(Position(row, pos.col));
+        }
+        message = 'LINE BLAST!';
+        break;
+      case PowerUpType.radial:
+        for (int dr = -1; dr <= 1; dr++) {
+          for (int dc = -1; dc <= 1; dc++) {
+            final newRow = pos.row + dr;
+            final newCol = pos.col + dc;
+            if (newRow >= 0 && newRow < widget.board.rows &&
+                newCol >= 0 && newCol < widget.board.cols) {
+              clearPositions.add(Position(newRow, newCol));
+            }
+          }
+        }
+        message = 'RADIAL BLAST!';
+        break;
+      case PowerUpType.colorBomb:
+      case PowerUpType.none:
+        // Color bomb requires a swap target, can't tap-activate
+        setState(() {
+          _isAnimating = false;
+        });
+        return;
+    }
+
+    // Notify about activation
+    widget.onPowerUp?.call(message);
+
+    // Animate the clear effect
+    _animatingPositions.clear();
+    for (final clearPos in clearPositions) {
+      _animatingPositions.add(clearPos);
+      _gemScales[clearPos] = 1.15;
+      _gemOpacities[clearPos] = 0.8;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Fade out
+    for (final clearPos in clearPositions) {
+      _gemScales[clearPos] = 0.5;
+      _gemOpacities[clearPos] = 0.0;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    // Remove cleared gems and calculate score
+    int points = clearPositions.length * 75;
+    for (final clearPos in clearPositions) {
+      widget.board.grid[clearPos.row][clearPos.col] = null;
+    }
+    widget.board.score += points;
+    widget.onScoreUpdate?.call(points, widget.board.combo);
+
+    _gemScales.clear();
+    _gemOpacities.clear();
+
+    // Apply gravity and fill
+    await _applyGravityAndFill();
+
+    // Process any cascading matches
+    widget.board.combo = 1;
+    await _processMatches();
+
+    // Count as a move
+    widget.onMoveComplete?.call();
+
+    setState(() {
+      _isAnimating = false;
+      _animatingPositions.clear();
+    });
+
+    // Check for valid moves
+    if (!widget.board.hasValidMoves()) {
+      await _handleNoMoves();
+    }
+  }
+
   Future<void> _trySwap(Position pos1, Position pos2) async {
     if (!widget.board.canSwap(pos1, pos2)) return;
 
@@ -422,8 +534,14 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
       _animatingPositions.add(pos2);
     });
 
-    // Check if swap creates a match
-    if (widget.board.wouldCreateMatch(pos1, pos2)) {
+    final gem1 = widget.board.getGem(pos1.row, pos1.col);
+    final gem2 = widget.board.getGem(pos2.row, pos2.col);
+    final bothHavePowerUps = gem1?.hasPowerUp == true && gem2?.hasPowerUp == true;
+    final hasColorBomb = gem1?.powerUp == PowerUpType.colorBomb ||
+                         gem2?.powerUp == PowerUpType.colorBomb;
+
+    // Check if swap involves power-ups or creates a match
+    if (bothHavePowerUps || hasColorBomb || widget.board.wouldCreateMatch(pos1, pos2)) {
       // Perform swap
       widget.board.swap(pos1, pos2);
       widget.board.combo = 0;
@@ -431,8 +549,15 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
       setState(() {});
       await Future.delayed(const Duration(milliseconds: 200));
 
-      // Process matches
-      await _processMatches();
+      // Handle special power-up swaps
+      if (bothHavePowerUps) {
+        await _processPowerUpCombination(pos1, pos2);
+      } else if (hasColorBomb) {
+        await _processColorBombSwap(pos1, pos2);
+      } else {
+        // Process normal matches, passing swap position for power-up placement
+        await _processMatches(swapPosition: pos2);
+      }
 
       // Notify move complete (for moves mode)
       widget.onMoveComplete?.call();
@@ -456,6 +581,169 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     if (!widget.board.hasValidMoves()) {
       await _handleNoMoves();
     }
+  }
+
+  /// Process swapping two power-up gems together
+  Future<void> _processPowerUpCombination(Position pos1, Position pos2) async {
+    final clearPositions = widget.board.getCombinedPowerUpClearPositions(pos1, pos2);
+
+    if (clearPositions.isEmpty) {
+      // Fallback to normal processing
+      await _processMatches(swapPosition: pos2);
+      return;
+    }
+
+    // Notify about the combo
+    widget.onPowerUp?.call('MEGA COMBO!');
+
+    // Animate the clear effect
+    _animatingPositions.clear();
+    for (final pos in clearPositions) {
+      _animatingPositions.add(pos);
+      _gemScales[pos] = 1.1;
+      _gemOpacities[pos] = 0.8;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Fade out
+    for (final pos in clearPositions) {
+      _gemScales[pos] = 0.5;
+      _gemOpacities[pos] = 0.0;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    // Remove all cleared gems
+    int points = clearPositions.length * 75;
+    for (final pos in clearPositions) {
+      widget.board.grid[pos.row][pos.col] = null;
+    }
+    widget.board.score += points;
+    widget.onScoreUpdate?.call(points, widget.board.combo);
+
+    _gemScales.clear();
+    _gemOpacities.clear();
+
+    // Apply gravity and fill
+    await _applyGravityAndFill();
+
+    // Process any cascading matches
+    await _processMatches();
+  }
+
+  /// Process swapping a color bomb with a regular gem
+  Future<void> _processColorBombSwap(Position pos1, Position pos2) async {
+    final gem1 = widget.board.getGem(pos1.row, pos1.col);
+    final gem2 = widget.board.getGem(pos2.row, pos2.col);
+
+    Position bombPos;
+    GemType targetColor;
+
+    if (gem1?.powerUp == PowerUpType.colorBomb) {
+      bombPos = pos1;
+      targetColor = gem2!.type;
+    } else {
+      bombPos = pos2;
+      targetColor = gem1!.type;
+    }
+
+    final clearPositions = widget.board.activateColorBomb(bombPos, targetColor);
+
+    // Notify about the color bomb
+    widget.onPowerUp?.call('COLOR BLAST!');
+
+    // Animate the clear effect
+    _animatingPositions.clear();
+    for (final pos in clearPositions) {
+      _animatingPositions.add(pos);
+      _gemScales[pos] = 1.15;
+      _gemOpacities[pos] = 0.7;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 120));
+
+    // Fade out
+    for (final pos in clearPositions) {
+      _gemScales[pos] = 0.3;
+      _gemOpacities[pos] = 0.0;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 150));
+
+    // Remove all cleared gems
+    int points = clearPositions.length * 100;
+    for (final pos in clearPositions) {
+      widget.board.grid[pos.row][pos.col] = null;
+    }
+    widget.board.score += points;
+    widget.onScoreUpdate?.call(points, widget.board.combo);
+
+    _gemScales.clear();
+    _gemOpacities.clear();
+
+    // Apply gravity and fill
+    await _applyGravityAndFill();
+
+    // Process any cascading matches
+    await _processMatches();
+  }
+
+  /// Helper to apply gravity and fill empty spaces with animation
+  Future<void> _applyGravityAndFill() async {
+    final gemSize = _gemSize;
+
+    // Apply gravity and get movement data
+    final movements = widget.board.applyGravity();
+
+    // Set up offsets so gems appear to start from their old positions
+    _animatingPositions.clear();
+    _gemOffsets.clear();
+    for (final col in movements.keys) {
+      for (final (fromRow, toRow) in movements[col]!) {
+        final pos = Position(toRow, col);
+        _gemOffsets[pos] = Offset(0, (fromRow - toRow) * gemSize);
+        _animatingPositions.add(pos);
+      }
+    }
+
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 50));
+
+    // Clear offsets to animate gems sliding down
+    for (final pos in _animatingPositions) {
+      _gemOffsets[pos] = Offset.zero;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 170));
+
+    // Fill empty spaces and get new gem data
+    final newGems = widget.board.fillEmptySpaces();
+
+    // Set up new gems to pop in with scale animation
+    _gemOffsets.clear();
+    _animatingPositions.clear();
+    for (final col in newGems.keys) {
+      final count = newGems[col]!;
+      for (int row = 0; row < count; row++) {
+        final pos = Position(row, col);
+        _gemScales[pos] = 0.0;
+        _animatingPositions.add(pos);
+      }
+    }
+
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 20));
+
+    // Animate new gems popping in
+    for (final pos in _animatingPositions) {
+      _gemScales[pos] = 1.0;
+    }
+    setState(() {});
+    await Future.delayed(const Duration(milliseconds: 110));
+
+    _gemOffsets.clear();
+    _gemScales.clear();
   }
 
   Future<void> _handleNoMoves() async {
@@ -487,101 +775,97 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     }
   }
 
-  Future<void> _processMatches() async {
-    var matches = widget.board.findMatches();
-    final gemSize = _gemSize;
+  Future<void> _processMatches({Position? swapPosition}) async {
+    var matches = widget.board.findMatches(swapPosition: swapPosition);
 
     while (matches.isNotEmpty) {
+      // Find positions that will be cleared vs those that will get power-ups
+      final positionsToRemove = <Position>{};
+      final powerUpPositions = <Position>{};
+
+      for (final match in matches) {
+        if (match.powerUpType != PowerUpType.none && match.powerUpPosition != null) {
+          powerUpPositions.add(match.powerUpPosition!);
+          for (final pos in match.positions) {
+            if (pos != match.powerUpPosition) {
+              positionsToRemove.add(pos);
+            }
+          }
+        } else {
+          positionsToRemove.addAll(match.positions);
+        }
+      }
+
       // Track matched positions for animation - gentle highlight
       _animatingPositions.clear();
-      for (final match in matches) {
-        for (final pos in match.positions) {
-          _animatingPositions.add(pos);
-          _gemScales[pos] = 1.05; // Subtle scale, less jarring
-          _gemOpacities[pos] = 0.8; // Keep mostly visible
-        }
+      for (final pos in positionsToRemove) {
+        _animatingPositions.add(pos);
+        _gemScales[pos] = 1.05;
+        _gemOpacities[pos] = 0.8;
+      }
+      // Power-up positions get a special highlight
+      for (final pos in powerUpPositions) {
+        _animatingPositions.add(pos);
+        _gemScales[pos] = 1.15; // More prominent
+        _gemOpacities[pos] = 1.0;
       }
       setState(() {});
       await Future.delayed(const Duration(milliseconds: 60));
 
-      // Fade out matched gems smoothly
-      for (final match in matches) {
-        for (final pos in match.positions) {
-          _gemScales[pos] = 0.8; // Shrink instead of pop
-          _gemOpacities[pos] = 0.0;
-        }
+      // Fade out gems being removed, pulse power-up positions
+      for (final pos in positionsToRemove) {
+        _gemScales[pos] = 0.8;
+        _gemOpacities[pos] = 0.0;
+      }
+      for (final pos in powerUpPositions) {
+        _gemScales[pos] = 1.2; // Growing effect
       }
       setState(() {});
       await Future.delayed(const Duration(milliseconds: 90));
 
       // Remove matches and update score
-      final points = widget.board.removeMatches(matches);
-      widget.onScoreUpdate?.call(points, widget.board.combo);
+      final result = widget.board.removeMatches(matches);
+      widget.onScoreUpdate?.call(result.points, widget.board.combo);
+
+      // Notify about power-ups created
+      for (final entry in result.powerUpsCreated.entries) {
+        final powerUpType = entry.value;
+        switch (powerUpType) {
+          case PowerUpType.lineHorizontal:
+          case PowerUpType.lineVertical:
+            widget.onPowerUp?.call('LINE BOMB!');
+            break;
+          case PowerUpType.radial:
+            widget.onPowerUp?.call('RADIAL BLAST!');
+            break;
+          case PowerUpType.colorBomb:
+            widget.onPowerUp?.call('COLOR BOMB!');
+            break;
+          case PowerUpType.none:
+            break;
+        }
+      }
+
+      // Notify about power-ups activated
+      for (final pos in result.powerUpsActivated) {
+        widget.onPowerUp?.call('BOOM!');
+      }
+
+      // Reset scales for power-up gems (they now have their new appearance)
+      for (final pos in powerUpPositions) {
+        _gemScales[pos] = 1.0;
+      }
 
       _gemScales.clear();
       _gemOpacities.clear();
 
-      // Apply gravity and get movement data
-      final movements = widget.board.applyGravity();
-
-      // Set up offsets so gems appear to start from their old positions
-      _animatingPositions.clear();
-      _gemOffsets.clear();
-      for (final col in movements.keys) {
-        for (final (fromRow, toRow) in movements[col]!) {
-          final pos = Position(toRow, col);
-          // Offset = where it came from relative to where it is now
-          _gemOffsets[pos] = Offset(0, (fromRow - toRow) * gemSize);
-          _animatingPositions.add(pos);
-        }
-      }
-
-      // Show gems at their old positions (via offset)
-      setState(() {});
-
-      // Pause to let users see the gap before gems fall
-      await Future.delayed(const Duration(milliseconds: 50));
-
-      // Clear offsets to animate gems sliding down
-      for (final pos in _animatingPositions) {
-        _gemOffsets[pos] = Offset.zero;
-      }
-      setState(() {});
-      await Future.delayed(const Duration(milliseconds: 170));
-
-      // Fill empty spaces and get new gem data
-      final newGems = widget.board.fillEmptySpaces();
-
-      // Set up new gems to pop in with scale animation
-      _gemOffsets.clear();
-      _animatingPositions.clear();
-      for (final col in newGems.keys) {
-        final count = newGems[col]!;
-        // New gems fill from row 0 down to row count-1
-        for (int row = 0; row < count; row++) {
-          final pos = Position(row, col);
-          // Start scaled to 0 (invisible) at final position
-          _gemScales[pos] = 0.0;
-          _animatingPositions.add(pos);
-        }
-      }
-
-      // Show gems at scale 0
-      setState(() {});
-      await Future.delayed(const Duration(milliseconds: 20));
-
-      // Animate new gems popping in
-      for (final pos in _animatingPositions) {
-        _gemScales[pos] = 1.0;
-      }
-      setState(() {});
-      await Future.delayed(const Duration(milliseconds: 110));
-
-      _gemOffsets.clear();
+      // Apply gravity and fill
+      await _applyGravityAndFill();
 
       // Increment combo and check for chain matches
       widget.board.combo++;
       matches = widget.board.findMatches();
+      swapPosition = null; // Only use swap position for first match
     }
 
     _animatingPositions.clear();

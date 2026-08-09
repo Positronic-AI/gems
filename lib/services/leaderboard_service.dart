@@ -8,6 +8,7 @@ class LeaderboardEntry {
   final DateTime date;
   final int gridSize;
   final int? level; // For target mode
+  final int? seed; // reproducible game seed (null on pre-seed entries)
 
   LeaderboardEntry({
     required this.name,
@@ -15,6 +16,7 @@ class LeaderboardEntry {
     required this.date,
     required this.gridSize,
     this.level,
+    this.seed,
   });
 
   Map<String, dynamic> toJson() => {
@@ -23,6 +25,7 @@ class LeaderboardEntry {
         'date': date.toIso8601String(),
         'gridSize': gridSize,
         'level': level,
+        'seed': seed,
       };
 
   factory LeaderboardEntry.fromJson(Map<String, dynamic> json) {
@@ -32,6 +35,7 @@ class LeaderboardEntry {
       date: DateTime.parse(json['date'] as String),
       gridSize: json['gridSize'] as int? ?? 8,
       level: json['level'] as int?,
+      seed: json['seed'] as int?,
     );
   }
 }
@@ -72,6 +76,7 @@ class LeaderboardService {
     required int score,
     required int gridSize,
     int? level,
+    int? seed,
   }) async {
     await _ensureInitialized();
 
@@ -83,6 +88,7 @@ class LeaderboardService {
       date: DateTime.now(),
       gridSize: gridSize,
       level: level,
+      seed: seed,
     );
 
     // Add new entry

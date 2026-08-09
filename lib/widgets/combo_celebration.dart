@@ -6,6 +6,7 @@ class ComboCelebration extends StatefulWidget {
   final int points;
   final Color? gemColor;
   final VoidCallback? onComplete;
+  final String? customText; // Override the combo text (e.g., "LINE BOMB")
 
   const ComboCelebration({
     super.key,
@@ -13,6 +14,7 @@ class ComboCelebration extends StatefulWidget {
     required this.points,
     this.gemColor,
     this.onComplete,
+    this.customText,
   });
 
   @override
@@ -31,6 +33,7 @@ class _ComboCelebrationState extends State<ComboCelebration>
   final Random _random = Random();
 
   String get _comboText {
+    if (widget.customText != null) return widget.customText!;
     if (widget.combo >= 5) return 'INCREDIBLE!';
     if (widget.combo >= 4) return 'AMAZING!';
     if (widget.combo >= 3) return 'FANTASTIC!';
@@ -131,23 +134,25 @@ class _ComboCelebrationState extends State<ComboCelebration>
     return AnimatedBuilder(
       animation: Listenable.merge([_textController, _particleController]),
       builder: (context, child) {
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Particles
-            ..._particles.map((p) => _buildParticle(p)),
-            // Combo text
-            Transform.translate(
-              offset: Offset(0, _slideAnimation.value),
-              child: Opacity(
-                opacity: _opacityAnimation.value,
-                child: Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: _buildComboText(),
+        return SizedBox.expand(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Particles
+              ..._particles.map((p) => _buildParticle(p)),
+              // Combo text
+              Transform.translate(
+                offset: Offset(0, _slideAnimation.value),
+                child: Opacity(
+                  opacity: _opacityAnimation.value,
+                  child: Transform.scale(
+                    scale: _scaleAnimation.value,
+                    child: _buildComboText(),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -185,6 +190,9 @@ class _ComboCelebrationState extends State<ComboCelebration>
     );
   }
 
+  // Check if we have a word to show (combo text or custom text)
+  bool get _hasWordText => widget.customText != null || widget.combo > 0;
+
   Widget _buildComboText() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -214,21 +222,24 @@ class _ComboCelebrationState extends State<ComboCelebration>
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            Text(
-              '+${widget.points}',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.amber,
-                shadows: [
-                  Shadow(
-                    color: Colors.orange.withOpacity(0.8),
-                    blurRadius: 10,
-                  ),
-                ],
+            // Only show separate points if main text is a word (not already points)
+            if (_hasWordText) ...[
+              const SizedBox(width: 12),
+              Text(
+                '+${widget.points}',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber,
+                  shadows: [
+                    Shadow(
+                      color: Colors.orange.withOpacity(0.8),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
         // Combo multiplier - only for actual combos

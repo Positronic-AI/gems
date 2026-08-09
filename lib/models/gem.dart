@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
+enum PowerUpType {
+  none,
+  lineHorizontal, // Match 4 horizontal - clears row
+  lineVertical,   // Match 4 vertical - clears column
+  radial,         // L or T shape - clears 3x3 area
+  colorBomb,      // Match 5 - clears all gems of swapped color
+}
+
 enum GemType {
   red,
   orange,
@@ -73,6 +81,8 @@ extension GemTypeExtension on GemType {
     switch (this) {
       case GemType.white:
         return const Color(0xFF4A4A5A); // dark color for contrast on white gem
+      case GemType.yellow:
+        return const Color(0xFF5D4E00); // dark gold for contrast on yellow gem
       default:
         return const Color(0xFFFFFFFF).withOpacity(0.9);
     }
@@ -82,6 +92,7 @@ extension GemTypeExtension on GemType {
 class Gem {
   final GemType type;
   final int id;
+  final PowerUpType powerUp;
   bool isMatched;
   bool isNew;
 
@@ -90,22 +101,44 @@ class Gem {
 
   Gem({
     required this.type,
+    this.powerUp = PowerUpType.none,
     this.isMatched = false,
     this.isNew = false,
   }) : id = _nextId++;
+
+  /// Create a gem with a specific ID (for power-up creation at same position)
+  Gem.withId({
+    required this.type,
+    required this.id,
+    this.powerUp = PowerUpType.none,
+    this.isMatched = false,
+    this.isNew = false,
+  });
 
   factory Gem.random() {
     final type = GemType.values[_random.nextInt(GemType.values.length)];
     return Gem(type: type, isNew: true);
   }
 
+  /// Seeded variant — board refills must draw from the board's own RNG so a
+  /// seed reproduces the whole game, not just the initial layout.
+  factory Gem.randomWith(Random random) {
+    final type = GemType.values[random.nextInt(GemType.values.length)];
+    return Gem(type: type, isNew: true);
+  }
+
+  bool get hasPowerUp => powerUp != PowerUpType.none;
+
   Gem copyWith({
     GemType? type,
+    PowerUpType? powerUp,
     bool? isMatched,
     bool? isNew,
   }) {
-    return Gem(
+    return Gem.withId(
       type: type ?? this.type,
+      id: id,
+      powerUp: powerUp ?? this.powerUp,
       isMatched: isMatched ?? this.isMatched,
       isNew: isNew ?? this.isNew,
     );

@@ -7,6 +7,7 @@ class GameOverScreen extends StatefulWidget {
   final GameMode mode;
   final int score;
   final int gridSize;
+  final int seed;
   final bool won; // For target mode
   final VoidCallback onPlayAgain;
   final VoidCallback onMainMenu;
@@ -17,6 +18,7 @@ class GameOverScreen extends StatefulWidget {
     required this.mode,
     required this.score,
     required this.gridSize,
+    required this.seed,
     this.won = false,
     required this.onPlayAgain,
     required this.onMainMenu,
@@ -190,6 +192,7 @@ class _GameOverScreenState extends State<GameOverScreen>
       score: widget.score,
       gridSize: widget.gridSize,
       level: widget.mode.type == GameModeType.target ? widget.mode.level : null,
+      seed: widget.seed,
     );
 
     // Load leaderboard
@@ -289,6 +292,19 @@ class _GameOverScreenState extends State<GameOverScreen>
                             blurRadius: 20,
                           ),
                         ],
+                      ),
+                    ),
+
+                    // Seed — replayable identity of this exact game
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Seed ${widget.seed}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.5),
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
 
@@ -425,7 +441,9 @@ class _GameOverScreenState extends State<GameOverScreen>
                   ),
                 ),
                 Text(
-                  '${entry.gridSize}x${entry.gridSize}',
+                  entry.seed != null
+                      ? '${entry.gridSize}x${entry.gridSize} · s${entry.seed}'
+                      : '${entry.gridSize}x${entry.gridSize}',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.5),
                     fontSize: 12,

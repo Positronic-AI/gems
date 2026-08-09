@@ -3,8 +3,21 @@ import '../models/game_mode.dart';
 import '../widgets/starfield_background.dart';
 import 'game_screen.dart';
 
-class ModeSelectScreen extends StatelessWidget {
+class ModeSelectScreen extends StatefulWidget {
   const ModeSelectScreen({super.key});
+
+  @override
+  State<ModeSelectScreen> createState() => _ModeSelectScreenState();
+}
+
+class _ModeSelectScreenState extends State<ModeSelectScreen> {
+  final _seedCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _seedCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +87,45 @@ class ModeSelectScreen extends StatelessWidget {
                       onTap: () => _startGame(context, const GameMode.zen()),
                     ),
                     const SizedBox(height: 24),
+
+                    // Seed: same seed = same board and refills. Leave blank
+                    // for a random game; scores record their seed either way.
+                    Row(
+                      children: [
+                        Icon(Icons.casino_outlined,
+                            size: 18, color: Colors.white.withOpacity(0.5)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _seedCtrl,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              counterText: '',
+                              isDense: true,
+                              hintText: 'Seed (optional) — replay a board',
+                              hintStyle: TextStyle(
+                                  color: Colors.white.withOpacity(0.35),
+                                  fontSize: 13),
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(
+                                    color: Colors.white.withOpacity(0.2)),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (_seedCtrl.text.isNotEmpty)
+                          IconButton(
+                            icon: Icon(Icons.clear,
+                                size: 16,
+                                color: Colors.white.withOpacity(0.5)),
+                            onPressed: () =>
+                                setState(() => _seedCtrl.clear()),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -85,10 +137,11 @@ class ModeSelectScreen extends StatelessWidget {
   }
 
   void _startGame(BuildContext context, GameMode mode) {
+    final seed = int.tryParse(_seedCtrl.text.trim());
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => GameScreen(mode: mode),
+        builder: (context) => GameScreen(mode: mode, seed: seed),
       ),
     );
   }

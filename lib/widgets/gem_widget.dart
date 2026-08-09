@@ -26,28 +26,28 @@ class GemWidget extends StatelessWidget {
         width: size,
         height: size,
         padding: EdgeInsets.all(size * 0.08),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+        child: Container(
           decoration: BoxDecoration(
-            gradient: RadialGradient(
-              colors: [
-                gem.type.glowColor,
-                gem.type.color,
-                gem.type.color.withOpacity(0.8),
-              ],
-              stops: const [0.0, 0.5, 1.0],
-            ),
+            gradient: _buildGradient(),
             borderRadius: BorderRadius.circular(size * 0.2),
             border: isSelected
                 ? Border.all(color: Colors.white, width: 3)
                 : isHinted
                     ? Border.all(color: Colors.yellow.withOpacity(0.8), width: 2)
-                    : null,
+                    : gem.hasPowerUp
+                        ? Border.all(color: _getPowerUpGlowColor(), width: 3)
+                        : null,
             boxShadow: [
+              if (gem.hasPowerUp)
+                BoxShadow(
+                  color: _getPowerUpGlowColor().withOpacity(0.7),
+                  blurRadius: 15,
+                  spreadRadius: 3,
+                ),
               BoxShadow(
-                color: gem.type.glowColor.withOpacity(isSelected ? 0.8 : 0.4),
-                blurRadius: isSelected ? 15 : 8,
-                spreadRadius: isSelected ? 2 : 0,
+                color: gem.type.glowColor.withOpacity(isSelected ? 0.8 : gem.hasPowerUp ? 0.6 : 0.4),
+                blurRadius: isSelected ? 15 : gem.hasPowerUp ? 12 : 8,
+                spreadRadius: isSelected ? 2 : gem.hasPowerUp ? 1 : 0,
               ),
               BoxShadow(
                 color: Colors.black.withOpacity(0.3),
@@ -57,115 +57,112 @@ class GemWidget extends StatelessWidget {
             ],
           ),
           child: Center(
-            child: Icon(
-              gem.type.icon,
-              size: size * 0.5,
-              color: gem.type.iconColor,
-              shadows: [
-                Shadow(
-                  color: gem.type == GemType.white
-                      ? Colors.white.withOpacity(0.5)
-                      : Colors.black.withOpacity(0.5),
-                  blurRadius: 4,
-                  offset: const Offset(1, 1),
-                ),
-              ],
-            ),
+            child: _buildIcon(),
           ),
         ),
       ),
     );
   }
-}
 
-class AnimatedGemWidget extends StatefulWidget {
-  final Gem gem;
-  final double size;
-  final bool isSelected;
-  final bool isMatched;
-  final bool isNew;
-  final VoidCallback? onTap;
-
-  const AnimatedGemWidget({
-    super.key,
-    required this.gem,
-    required this.size,
-    this.isSelected = false,
-    this.isMatched = false,
-    this.isNew = false,
-    this.onTap,
-  });
-
-  @override
-  State<AnimatedGemWidget> createState() => _AnimatedGemWidgetState();
-}
-
-class _AnimatedGemWidgetState extends State<AnimatedGemWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(_controller);
-    _opacityAnimation = Tween<double>(begin: 1.0, end: 1.0).animate(_controller);
-
-    if (widget.isNew) {
-      _controller.duration = const Duration(milliseconds: 200);
-      _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-      );
-      _controller.forward();
+  Color _getPowerUpGlowColor() {
+    switch (gem.powerUp) {
+      case PowerUpType.lineHorizontal:
+      case PowerUpType.lineVertical:
+        return Colors.cyan;
+      case PowerUpType.radial:
+        return Colors.orange;
+      case PowerUpType.colorBomb:
+        return Colors.white;
+      case PowerUpType.none:
+        return gem.type.glowColor;
     }
   }
 
-  @override
-  void didUpdateWidget(AnimatedGemWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
+  Widget _buildIcon() {
+    // For power-ups, show the power-up icon instead of the gem icon
+    if (gem.hasPowerUp) {
+      IconData powerUpIcon;
+      Color iconColor = Colors.white;
+      double iconSize = size * 0.55;
 
-    if (widget.isMatched && !oldWidget.isMatched) {
-      _controller.duration = const Duration(milliseconds: 300);
-      _scaleAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-      );
-      _opacityAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-      );
-      _controller.forward(from: 0);
-    }
-  }
+      switch (gem.powerUp) {
+        case PowerUpType.lineHorizontal:
+          powerUpIcon = Icons.swap_horiz;
+          iconColor = Colors.cyan.shade100;
+          break;
+        case PowerUpType.lineVertical:
+          powerUpIcon = Icons.swap_vert;
+          iconColor = Colors.cyan.shade100;
+          break;
+        case PowerUpType.radial:
+          powerUpIcon = Icons.blur_on;
+          iconColor = Colors.orange.shade100;
+          break;
+        case PowerUpType.colorBomb:
+          powerUpIcon = Icons.all_inclusive;
+          iconColor = Colors.white;
+          iconSize = size * 0.5;
+          break;
+        case PowerUpType.none:
+          powerUpIcon = gem.type.icon;
+      }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnimation.value,
-          child: Opacity(
-            opacity: _opacityAnimation.value,
-            child: GemWidget(
-              gem: widget.gem,
-              size: widget.size,
-              isSelected: widget.isSelected,
-              onTap: widget.onTap,
-            ),
+      return Icon(
+        powerUpIcon,
+        size: iconSize,
+        color: iconColor,
+        shadows: const [
+          Shadow(
+            color: Colors.black,
+            blurRadius: 6,
+            offset: Offset(1, 1),
           ),
-        );
-      },
+        ],
+      );
+    }
+
+    // Regular gem icon
+    return Icon(
+      gem.type.icon,
+      size: size * 0.5,
+      color: gem.type.iconColor,
+      shadows: [
+        Shadow(
+          color: gem.type == GemType.white || gem.type == GemType.yellow
+              ? Colors.white.withOpacity(0.5)
+              : Colors.black.withOpacity(0.5),
+          blurRadius: 4,
+          offset: const Offset(1, 1),
+        ),
+      ],
+    );
+  }
+
+  Gradient _buildGradient() {
+    if (gem.powerUp == PowerUpType.colorBomb) {
+      // Rainbow gradient for color bomb
+      return const SweepGradient(
+        colors: [
+          Colors.red,
+          Colors.orange,
+          Colors.yellow,
+          Colors.green,
+          Colors.blue,
+          Colors.purple,
+          Colors.red,
+        ],
+        stops: [0.0, 0.17, 0.33, 0.5, 0.67, 0.83, 1.0],
+      );
+    }
+
+    // Regular gem gradient
+    return RadialGradient(
+      colors: [
+        gem.type.glowColor,
+        gem.type.color,
+        gem.type.color.withOpacity(0.8),
+      ],
+      stops: const [0.0, 0.5, 1.0],
     );
   }
 }

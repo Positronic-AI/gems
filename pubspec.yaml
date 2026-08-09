@@ -2,7 +2,7 @@ name: gem_game
 description: "A colorful match-3 puzzle game"
 publish_to: 'none'
 
-version: 1.0.0+6
+version: 1.1.0+9
 
 environment:
   sdk: ^3.10.0
