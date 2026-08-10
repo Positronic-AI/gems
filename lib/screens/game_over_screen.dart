@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import '../services/daily_gem.dart';
 import '../models/game_mode.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/starfield_background.dart';
@@ -8,6 +10,7 @@ class GameOverScreen extends StatefulWidget {
   final int score;
   final int gridSize;
   final int seed;
+  final bool isDaily;
   final bool won; // For target mode
   final VoidCallback onPlayAgain;
   final VoidCallback onMainMenu;
@@ -19,6 +22,7 @@ class GameOverScreen extends StatefulWidget {
     required this.score,
     required this.gridSize,
     required this.seed,
+    this.isDaily = false,
     this.won = false,
     required this.onPlayAgain,
     required this.onMainMenu,
@@ -184,7 +188,12 @@ class _GameOverScreenState extends State<GameOverScreen>
     );
   }
 
+  bool _dailyCounted = false;
+
   Future<void> _saveScore() async {
+    if (widget.isDaily) {
+      _dailyCounted = await DailyGem.recordScore(widget.score);
+    }
     // Save score
     _newRank = await _leaderboardService.addScore(
       mode: widget.mode.type,
@@ -213,7 +222,8 @@ class _GameOverScreenState extends State<GameOverScreen>
           child: Center(
             child: ScaleTransition(
               scale: _scaleAnimation,
-              child: Container(
+              child: SingleChildScrollView(
+                child: Container(
                 margin: const EdgeInsets.all(24),
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -331,6 +341,26 @@ class _GameOverScreenState extends State<GameOverScreen>
                         ),
                       ),
 
+                    if (widget.isDaily) ...[
+                      const SizedBox(height: 12),
+                      _buildButton(
+                        'Share score',
+                        Colors.amber,
+                        () => Share.share(DailyGem.shareText(widget.score)),
+                      ),
+                      if (!_dailyCounted)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Practice run — your first score today already counts.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.5),
+                            ),
+                          ),
+                        ),
+                    ],
+
                     const SizedBox(height: 24),
 
                     // Leaderboard
@@ -359,6 +389,7 @@ class _GameOverScreenState extends State<GameOverScreen>
                     ),
                   ],
                 ),
+              ),
               ),
             ),
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/game_mode.dart';
+import '../services/daily_gem.dart';
 import '../widgets/starfield_background.dart';
 import 'game_screen.dart';
 
@@ -12,6 +13,15 @@ class ModeSelectScreen extends StatefulWidget {
 
 class _ModeSelectScreenState extends State<ModeSelectScreen> {
   final _seedCtrl = TextEditingController();
+  int? _dailyScore;
+
+  @override
+  void initState() {
+    super.initState();
+    DailyGem.todayScore().then((v) {
+      if (mounted) setState(() => _dailyScore = v);
+    });
+  }
 
   @override
   void dispose() {
@@ -63,6 +73,8 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
                 child: ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   children: [
+                    _buildDailyCard(context),
+                    const SizedBox(height: 20),
                     _ModeCard(
                       mode: GameModeType.timed,
                       color: Colors.orange,
@@ -131,6 +143,78 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyCard(BuildContext context) {
+    final played = _dailyScore != null;
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => GameScreen(
+              mode: const GameMode.moves(),
+              seed: DailyGem.seedFor(),
+              isDaily: true,
+            ),
+          ),
+        );
+        final v = await DailyGem.todayScore();
+        if (mounted) setState(() => _dailyScore = v);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.amber.shade700, Colors.deepOrange.shade800],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.amber.withOpacity(0.35),
+              blurRadius: 18,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Text('💎', style: TextStyle(fontSize: 34)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Daily Gem — ${DailyGem.displayDate()}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    played
+                        ? 'Your score: $_dailyScore  ·  tap to practice'
+                        : 'Same board for everyone, once a day. 30 moves.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Colors.white.withOpacity(0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              played ? Icons.check_circle : Icons.play_circle_fill,
+              color: Colors.white,
+              size: 30,
+            ),
+          ],
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/game_board.dart';
+import '../services/daily_gem.dart';
 import '../models/game_mode.dart';
 import '../widgets/combo_celebration.dart';
 import '../widgets/game_board_widget.dart';
@@ -10,11 +11,13 @@ import 'game_over_screen.dart';
 class GameScreen extends StatefulWidget {
   final GameMode mode;
   final int? seed; // null = random; set = reproducible board + refills
+  final bool isDaily; // Daily Gem: fixed size, score records once per day
 
   const GameScreen({
     super.key,
     required this.mode,
     this.seed,
+    this.isDaily = false,
   });
 
   @override
@@ -55,7 +58,9 @@ class _GameScreenState extends State<GameScreen>
   void initState() {
     super.initState();
     _currentMode = widget.mode;
-    _board = GameBoard(seed: widget.seed);
+    _board = widget.isDaily
+        ? GameBoard(size: DailyGem.gridSize, seed: widget.seed)
+        : GameBoard(seed: widget.seed);
     _initializeMode();
 
     _scoreAnimController = AnimationController(
@@ -228,6 +233,7 @@ class _GameScreenState extends State<GameScreen>
   }
 
   void _onSizeChange(int newSize) {
+    if (widget.isDaily) return; // Daily Gem is 8x8 for everyone — no resize
     setState(() {
       _board.resize(newSize);
       _displayScore = 0;
@@ -247,14 +253,17 @@ class _GameScreenState extends State<GameScreen>
           score: _displayScore,
           gridSize: _board.rows,
           seed: _board.seed,
+          isDaily: widget.isDaily,
           won: won,
           onPlayAgain: () {
             // Same seed: "play again" is a rematch on the same board.
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) =>
-                    GameScreen(mode: widget.mode, seed: _board.seed),
+                builder: (context) => GameScreen(
+                    mode: widget.mode,
+                    seed: _board.seed,
+                    isDaily: widget.isDaily),
               ),
             );
           },
