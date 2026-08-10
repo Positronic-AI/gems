@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/material.dart';
 import '../models/game_board.dart';
 import '../services/daily_gem.dart';
@@ -57,6 +58,10 @@ class _GameScreenState extends State<GameScreen>
   @override
   void initState() {
     super.initState();
+    // Screen stays awake only while a game is in progress — thinking pauses
+    // are gameplay. Menus and game-over release it (dispose) so the phone
+    // sleeps normally everywhere else.
+    WakelockPlus.enable();
     _currentMode = widget.mode;
     _board = widget.isDaily
         ? GameBoard(size: DailyGem.gridSize, seed: widget.seed)
@@ -140,6 +145,7 @@ class _GameScreenState extends State<GameScreen>
 
   @override
   void dispose() {
+    WakelockPlus.disable();
     _timer?.cancel();
     _scoreAnimController.dispose();
     _powerUpAnimController.dispose();
