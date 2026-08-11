@@ -704,6 +704,33 @@ class GameBoard {
     return newGems;
   }
 
+  /// Count distinct match-producing swaps on the board. Tappable power-ups
+  /// are bonuses, not moves — they are deliberately not counted here.
+  int countValidMoves() {
+    int count = 0;
+    for (int row = 0; row < _rows; row++) {
+      for (int col = 0; col < _cols; col++) {
+        final pos = Position(row, col);
+        if (col < _cols - 1 && wouldCreateMatch(pos, Position(row, col + 1))) {
+          count++;
+        }
+        if (row < _rows - 1 && wouldCreateMatch(pos, Position(row + 1, col))) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  /// Deep-copy the grid (Gems are immutable — row copies suffice). Used by
+  /// undo: snapshot before a move, restore to take it back.
+  List<List<Gem?>> snapshotGrid() =>
+      grid.map((row) => List<Gem?>.from(row)).toList();
+
+  void restoreGrid(List<List<Gem?>> snapshot) {
+    grid = snapshot.map((row) => List<Gem?>.from(row)).toList();
+  }
+
   bool hasValidMoves() {
     for (int row = 0; row < _rows; row++) {
       for (int col = 0; col < _cols; col++) {

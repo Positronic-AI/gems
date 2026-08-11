@@ -110,4 +110,41 @@ void main() {
       expect(r.streak, 4);
     });
   });
+
+  group('undo + move-count support', () {
+    test('countValidMoves is positive on a fresh board and matches hasValidMoves', () {
+      final board = GameBoard(size: 8, seed: 424242);
+      final n = board.countValidMoves();
+      expect(n > 0, board.hasValidMoves());
+    });
+
+    test('snapshot/restore round-trips the grid exactly', () {
+      final board = GameBoard(size: 8, seed: 77);
+      final snap = board.snapshotGrid();
+      final before = [
+        for (var r = 0; r < board.rows; r++)
+          [for (var c = 0; c < board.cols; c++) board.getGem(r, c)?.type]
+      ];
+      // Mutate: clear a few cells and refill (advances RNG)
+      board.grid[0][0] = null;
+      board.grid[3][4] = null;
+      board.fillEmptySpaces();
+      board.score = 999;
+      board.restoreGrid(snap);
+      for (var r = 0; r < board.rows; r++) {
+        for (var c = 0; c < board.cols; c++) {
+          expect(board.getGem(r, c)?.type, before[r][c],
+              reason: 'cell ($r,$c) must match pre-mutation');
+        }
+      }
+    });
+
+    test('restore is a copy — later board mutations cannot corrupt history', () {
+      final board = GameBoard(size: 8, seed: 12345);
+      final snap = board.snapshotGrid();
+      board.restoreGrid(snap);
+      board.grid[0][0] = null; // mutate restored board
+      expect(snap[0][0], isNotNull, reason: 'snapshot must be independent');
+    });
+  });
 }

@@ -12,6 +12,14 @@ class GameBoardWidget extends StatefulWidget {
   final VoidCallback? onMoveComplete;
   final Function(String message)? onPowerUp;
 
+  /// Fired synchronously BEFORE the board mutates for a player action
+  /// (valid swap or power-up tap) — the undo snapshot moment.
+  final VoidCallback? onMoveStarted;
+
+  /// Fired when the board is fully settled after a player action
+  /// (cascades done, shuffle-if-stuck done) — safe to recount moves / undo.
+  final VoidCallback? onBoardSettled;
+
   const GameBoardWidget({
     super.key,
     required this.board,
@@ -20,6 +28,8 @@ class GameBoardWidget extends StatefulWidget {
     this.onSizeChange,
     this.onMoveComplete,
     this.onPowerUp,
+    this.onMoveStarted,
+    this.onBoardSettled,
   });
 
   @override
@@ -430,6 +440,8 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     final gem = widget.board.getGem(pos.row, pos.col);
     if (gem == null || !gem.hasPowerUp) return;
 
+    widget.onMoveStarted?.call();
+
     setState(() {
       _isAnimating = true;
       _selectedPosition = null;
@@ -513,8 +525,7 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     widget.board.combo = 1;
     await _processMatches();
 
-    // Count as a move
-    widget.onMoveComplete?.call();
+    // Power-ups are bonuses — activating one does NOT consume a move.
 
     setState(() {
       _isAnimating = false;
@@ -525,6 +536,8 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     if (!widget.board.hasValidMoves()) {
       await _handleNoMoves();
     }
+
+    widget.onBoardSettled?.call();
   }
 
   Future<void> _trySwap(Position pos1, Position pos2) async {
@@ -546,6 +559,7 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
 
     // Check if swap involves power-ups or creates a match
     if (bothHavePowerUps || hasColorBomb || widget.board.wouldCreateMatch(pos1, pos2)) {
+      widget.onMoveStarted?.call();
       // Perform swap
       widget.board.swap(pos1, pos2);
       widget.board.combo = 0;
@@ -563,8 +577,11 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
         await _processMatches(swapPosition: pos2);
       }
 
-      // Notify move complete (for moves mode)
-      widget.onMoveComplete?.call();
+      // Notify move complete (for moves mode). Swaps that ACTIVATE bombs
+      // are bonuses and don't consume a move — only ordinary match swaps do.
+      if (!bothHavePowerUps && !hasColorBomb) {
+        widget.onMoveComplete?.call();
+      }
     } else {
       // Invalid swap - animate swap and swap back
       widget.board.swap(pos1, pos2);
@@ -585,6 +602,8 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     if (!widget.board.hasValidMoves()) {
       await _handleNoMoves();
     }
+
+    widget.onBoardSettled?.call();
   }
 
   /// Process swapping two power-up gems together

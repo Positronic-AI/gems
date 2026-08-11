@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:flutter/material.dart';
 import '../models/game_board.dart';
+import '../models/gem.dart';
 import '../services/daily_gem.dart';
 import '../models/game_mode.dart';
 import '../widgets/combo_celebration.dart';
@@ -45,6 +46,13 @@ class _GameScreenState extends State<GameScreen>
 
   // Power-up fanfare
   String? _powerUpMessage;
+
+  // Undo (chess takeback): snapshots taken before each move. Using undo
+  // turns the game into PRACTICE — score is not recorded anywhere.
+  final List<_MoveSnapshot> _history = [];
+  bool _practice = false;
+  bool _moveInFlight = false;
+  static const int _maxHistory = 30;
 
   // Debug mode
   int _debugTapCount = 0;
@@ -212,6 +220,65 @@ class _GameScreenState extends State<GameScreen>
     }
   }
 
+  void _onMoveStarted() {
+    _moveInFlight = true;
+    _history.add(_MoveSnapshot(
+      grid: _board.snapshotGrid(),
+      score: _board.score,
+      combo: _board.combo,
+      movesRemaining: _movesRemaining,
+    ));
+    if (_history.length > _maxHistory) _history.removeAt(0);
+  }
+
+  void _onBoardSettled() {
+    if (mounted) {
+      setState(() {
+        _moveInFlight = false; // also refreshes the valid-move count
+      });
+    }
+  }
+
+  Future<void> _undo() async {
+    if (_history.isEmpty || _moveInFlight || _gameOver) return;
+
+    if (!_practice) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Take back this move?'),
+          content: const Text(
+              'Undo turns this into a practice game — your score won\'t be '
+              'recorded. Great for learning the board; the daily still waits '
+              'for a real attempt.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Take back'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      _practice = true;
+    }
+
+    final snap = _history.removeLast();
+    setState(() {
+      _board.restoreGrid(snap.grid);
+      _board.score = snap.score;
+      _board.combo = snap.combo;
+      _movesRemaining = snap.movesRemaining;
+      _displayScore = snap.score;
+      _showCelebration = false;
+      _powerUpMessage = null;
+    });
+  }
+
   void _onNoMoves() {
     // Just show a brief snackbar - the widget handles shuffle automatically
     ScaffoldMessenger.of(context).showSnackBar(
@@ -260,6 +327,7 @@ class _GameScreenState extends State<GameScreen>
           gridSize: _board.rows,
           seed: _board.seed,
           isDaily: widget.isDaily,
+          practice: _practice,
           won: won,
           onPlayAgain: () {
             // Same seed: "play again" is a rematch on the same board.
@@ -322,6 +390,9 @@ class _GameScreenState extends State<GameScreen>
                 _board.reset();
                 _displayScore = 0;
                 _gameOver = false;
+                _history.clear();
+                _practice = false;
+                _moveInFlight = false;
                 _initializeMode();
               });
             },
@@ -352,13 +423,40 @@ class _GameScreenState extends State<GameScreen>
               _buildHeader(),
 
               // Seed — quiet but present; this exact game's identity
-              Text(
-                'seed ${_board.seed}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.white.withOpacity(0.35),
-                  letterSpacing: 1,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'seed ${_board.seed}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.35),
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  if (_practice) ...[
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: Colors.amber.withOpacity(0.5)),
+                      ),
+                      child: const Text(
+                        'PRACTICE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
 
               // Mode-specific display (timer, moves, target)
@@ -393,8 +491,28 @@ class _GameScreenState extends State<GameScreen>
                     onSizeChange: _onSizeChange,
                     onMoveComplete: _onMoveComplete,
                     onPowerUp: _onPowerUp,
+                    onMoveStarted: _onMoveStarted,
+                    onBoardSettled: _onBoardSettled,
                   ),
                 ),
+              ),
+
+              // Valid-move count — always visible, all modes
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Builder(builder: (context) {
+                  final n = _board.countValidMoves();
+                  return Text(
+                    n == 1 ? '1 move on the board' : '$n moves on the board',
+                    style: TextStyle(
+                      color: n <= 2
+                          ? Colors.orange.withOpacity(0.9)
+                          : Colors.white.withOpacity(0.6),
+                      fontSize: 13,
+                      fontWeight: n <= 2 ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  );
+                }),
               ),
 
               // Grid size hint
@@ -443,6 +561,19 @@ class _GameScreenState extends State<GameScreen>
                 icon: const Icon(Icons.refresh),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.purple.withOpacity(0.3),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed:
+                    (_history.isEmpty || _moveInFlight) ? null : _undo,
+                icon: const Icon(Icons.undo),
+                tooltip: 'Take back (practice)',
+                style: IconButton.styleFrom(
+                  backgroundColor: _practice
+                      ? Colors.amber.withOpacity(0.25)
+                      : Colors.white.withOpacity(0.1),
+                  disabledBackgroundColor: Colors.white.withOpacity(0.04),
                 ),
               ),
             ],
@@ -651,4 +782,21 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
+}
+
+/// One undo step: everything a takeback must restore. The RNG stream is
+/// deliberately NOT restored — after an undo the game is practice, so
+/// refill divergence from the seeded game is acceptable by design.
+class _MoveSnapshot {
+  final List<List<Gem?>> grid;
+  final int score;
+  final int combo;
+  final int movesRemaining;
+
+  _MoveSnapshot({
+    required this.grid,
+    required this.score,
+    required this.combo,
+    required this.movesRemaining,
+  });
 }

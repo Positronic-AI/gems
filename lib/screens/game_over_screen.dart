@@ -11,6 +11,7 @@ class GameOverScreen extends StatefulWidget {
   final int gridSize;
   final int seed;
   final bool isDaily;
+  final bool practice; // Undo was used — score is not recorded anywhere
   final bool won; // For target mode
   final VoidCallback onPlayAgain;
   final VoidCallback onMainMenu;
@@ -23,6 +24,7 @@ class GameOverScreen extends StatefulWidget {
     required this.gridSize,
     required this.seed,
     this.isDaily = false,
+    this.practice = false,
     this.won = false,
     required this.onPlayAgain,
     required this.onMainMenu,
@@ -70,6 +72,19 @@ class _GameOverScreenState extends State<GameOverScreen>
   }
 
   Future<void> _checkAndHandleHighScore() async {
+    if (widget.practice) {
+      // Practice games (undo used) record nothing — no leaderboard, no
+      // daily mark. Just show the board's final state.
+      _leaderboard = await _leaderboardService.getLeaderboard(widget.mode.type);
+      if (widget.isDaily) {
+        _streak = await DailyGem.currentStreak();
+        _bestStreak = await DailyGem.bestStreak();
+      }
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
     // Check if this is a high score
     _isHighScore = await _leaderboardService.isHighScore(
       widget.mode.type,
@@ -322,6 +337,31 @@ class _GameOverScreenState extends State<GameOverScreen>
                       ),
                     ),
 
+                    // Practice badge — undo was used, nothing recorded
+                    if (widget.practice)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: Colors.amber.withOpacity(0.5)),
+                        ),
+                        child: const Text(
+                          'PRACTICE — score not recorded',
+                          style: TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
+
                     // New high score indicator
                     if (_newRank != null && _newRank! <= 5)
                       Container(
@@ -345,7 +385,9 @@ class _GameOverScreenState extends State<GameOverScreen>
                         ),
                       ),
 
-                    if (widget.isDaily) ...[
+                    // Practice dailies get no Share — a takeback score isn't
+                    // a daily result, and the badge above says why.
+                    if (widget.isDaily && !widget.practice) ...[
                       const SizedBox(height: 12),
                       _buildButton(
                         'Share score',
