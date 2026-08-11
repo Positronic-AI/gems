@@ -36,7 +36,9 @@ class GemWidget extends StatelessWidget {
   Widget _buildFlatOrGlassTile(TileStyle style) {
     return Container(
       decoration: BoxDecoration(
-        gradient: _buildGradient(),
+        gradient: style == TileStyle.glass
+            ? _buildGlassGradient()
+            : _buildGradient(),
         borderRadius: BorderRadius.circular(size * 0.2),
         border: isSelected
             ? Border.all(color: Colors.white, width: 3)
@@ -155,7 +157,7 @@ class GemWidget extends StatelessWidget {
   /// gem's color lives in the shape, Scrabble-tile style, so match
   /// readability is untouched.
   Widget _buildWoodTile() {
-    final ext = size * 0.10; // extrusion depth
+    final ext = size * 0.05; // extrusion depth (halved per playtest)
     // Per-tile hue jitter: planks from the same tree, not the same print
     final j = (gem.id * 2654435761) % 5; // 0..4
     final face = Color.lerp(const Color(0xFFD9B98C),
@@ -282,6 +284,32 @@ class GemWidget extends StatelessWidget {
     }
 
     // Regular gem icon
+    if (ActiveTileStyle.current == TileStyle.wood) {
+      // Scrabble aesthetic: the SHAPE carries the gem's color on wood.
+      // Pale colors (white/yellow gems) darken toward walnut so they
+      // don't wash out on maple; a carved emboss shadow grounds them.
+      var c = gem.type.color;
+      if (c.computeLuminance() > 0.55) {
+        c = Color.lerp(c, const Color(0xFF5C4327), 0.55)!;
+      }
+      return Icon(
+        gem.type.icon,
+        size: size * 0.5,
+        color: c,
+        shadows: [
+          Shadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 2,
+            offset: const Offset(1, 1.5),
+          ),
+          Shadow(
+            color: Colors.white.withOpacity(0.35),
+            blurRadius: 1,
+            offset: const Offset(-0.5, -0.5),
+          ),
+        ],
+      );
+    }
     return Icon(
       gem.type.icon,
       size: size * 0.5,
@@ -295,6 +323,20 @@ class GemWidget extends StatelessWidget {
           offset: const Offset(1, 1),
         ),
       ],
+    );
+  }
+
+  /// Glass: same hues but translucent — the starfield ghosts through,
+  /// which is what actually reads as "glass".
+  Gradient _buildGlassGradient() {
+    if (gem.powerUp == PowerUpType.colorBomb) return _buildGradient();
+    return RadialGradient(
+      colors: [
+        gem.type.glowColor.withOpacity(0.80),
+        gem.type.color.withOpacity(0.72),
+        gem.type.color.withOpacity(0.55),
+      ],
+      stops: const [0.0, 0.5, 1.0],
     );
   }
 
