@@ -519,7 +519,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: const TextStyle(color: Colors.white38, fontSize: 12),
                 )
               : (p.id.startsWith('user_')
-                  ? const Text('Custom theme · tap ✏️ for the Studio',
+                  ? const Text('Custom theme · edit in the Studio',
                       style: TextStyle(color: Colors.white54, fontSize: 12))
                   : p.id == 'colorblind'
                       ? const Text('Colorblind-friendly · free for everyone',
@@ -528,12 +528,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (p.id.startsWith('user_') && unlocked)
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
-                  tooltip: 'Open Studio',
-                  onPressed: _openStudio,
-                ),
               if (selected)
                 const Icon(Icons.check_circle, color: Colors.amber)
               else if (!unlocked)
