@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/gem.dart';
+import '../models/tile_style.dart';
 import '../models/game_board.dart';
 import 'gem_widget.dart';
 
@@ -81,22 +82,39 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
 
   @override
   Widget build(BuildContext context) {
+    final wood = ActiveTileStyle.current == TileStyle.wood;
     return Container(
       margin: const EdgeInsets.all(16),
+      // Wood: frameless and matte — the purple glass frame fought the
+      // material. Extra bottom/right padding balances the tiles' extruded
+      // side faces so the board's visual margins read symmetric.
+      padding: wood
+          ? const EdgeInsets.only(bottom: 5, right: 5)
+          : EdgeInsets.zero,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.3),
+        color: Colors.black.withOpacity(wood ? 0.22 : 0.3),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.purple.withOpacity(0.5),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purple.withOpacity(0.3),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
+        border: wood
+            ? null
+            : Border.all(
+                color: Colors.purple.withOpacity(0.5),
+                width: 2,
+              ),
+        boxShadow: wood
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 16,
+                  spreadRadius: 1,
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.purple.withOpacity(0.3),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),

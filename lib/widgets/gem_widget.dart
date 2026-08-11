@@ -86,20 +86,59 @@ class GemWidget extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // Light transmitted through the glass pools at the bottom
                   Positioned(
-                    left: size * 0.14,
-                    top: size * 0.10,
-                    child: Container(
-                      width: size * 0.30,
-                      height: size * 0.18,
+                    left: size * 0.10,
+                    right: size * 0.10,
+                    bottom: 0,
+                    height: size * 0.30,
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(size * 0.15),
                         gradient: RadialGradient(
+                          center: Alignment.bottomCenter,
+                          radius: 1.1,
                           colors: [
-                            Colors.white.withOpacity(0.55),
-                            Colors.white.withOpacity(0.0),
+                            gem.type.glowColor.withOpacity(0.45),
+                            gem.type.glowColor.withOpacity(0.0),
                           ],
                         ),
+                      ),
+                    ),
+                  ),
+                  // Crisp specular glint
+                  Positioned(
+                    left: size * 0.13,
+                    top: size * 0.09,
+                    child: Transform.rotate(
+                      angle: -0.35,
+                      child: Container(
+                        width: size * 0.34,
+                        height: size * 0.13,
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(size * 0.12),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.white.withOpacity(0.75),
+                              Colors.white.withOpacity(0.05),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Bright top rim — the glass edge catching light
+                  Positioned(
+                    left: size * 0.06,
+                    right: size * 0.3,
+                    top: size * 0.025,
+                    height: 1.6,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(1),
+                        color: Colors.white.withOpacity(0.6),
                       ),
                     ),
                   ),
@@ -117,8 +156,12 @@ class GemWidget extends StatelessWidget {
   /// readability is untouched.
   Widget _buildWoodTile() {
     final ext = size * 0.10; // extrusion depth
-    const face = Color(0xFFD9B98C); // warm maple
-    const side = Color(0xFF8C6B44); // darker end-grain
+    // Per-tile hue jitter: planks from the same tree, not the same print
+    final j = (gem.id * 2654435761) % 5; // 0..4
+    final face = Color.lerp(const Color(0xFFD9B98C),
+        const Color(0xFFC9A876), j / 4.0)!;
+    final side = Color.lerp(const Color(0xFF8C6B44),
+        const Color(0xFF7A5A38), j / 4.0)!;
     final radius = BorderRadius.circular(size * 0.14);
     return Stack(
       children: [
@@ -168,7 +211,8 @@ class GemWidget extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: CustomPaint(painter: WoodGrainPainter(face)),
+                    child: CustomPaint(
+                        painter: WoodGrainPainter(face, seed: gem.id)),
                   ),
                   Center(child: _buildIcon()),
                 ],
