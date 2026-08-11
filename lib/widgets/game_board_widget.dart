@@ -85,36 +85,22 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     final wood = ActiveTileStyle.current == TileStyle.wood;
     return Container(
       margin: const EdgeInsets.all(16),
-      // Wood: frameless and matte — the purple glass frame fought the
-      // material. Extra bottom/right padding balances the tiles' extruded
-      // side faces so the board's visual margins read symmetric.
+      // Frameless everywhere (playtest verdict: the purple frame was
+      // glass-era chrome nothing needed). Wood pads bottom/right to
+      // balance its extruded side faces.
       padding: wood
-          ? const EdgeInsets.only(bottom: 5, right: 5)
+          ? const EdgeInsets.only(bottom: 3, right: 3)
           : EdgeInsets.zero,
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(wood ? 0.22 : 0.3),
         borderRadius: BorderRadius.circular(16),
-        border: wood
-            ? null
-            : Border.all(
-                color: Colors.purple.withOpacity(0.5),
-                width: 2,
-              ),
-        boxShadow: wood
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  blurRadius: 16,
-                  spreadRadius: 1,
-                ),
-              ]
-            : [
-                BoxShadow(
-                  color: Colors.purple.withOpacity(0.3),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 16,
+            spreadRadius: 1,
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
