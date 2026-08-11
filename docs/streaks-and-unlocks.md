@@ -54,3 +54,15 @@ every share is a small brag and an ad).
 - Starfield theme variant (was the old 14-day rung; Studio took it).
 - Weekly Gem (spicier shared board, Mondays).
 - Local achievements; personal daily-score calendar.
+
+## Creator/viral vector (Ben, 2026-08-10)
+
+Theme codes are broadcastable artifacts with a built-in install funnel —
+a creator shares their code, followers need the game to use it. Zero
+backend throughout. Amplifiers, by leverage: (1) GEMS2 envelope with
+theme NAME + AUTHOR so imports read "Install 'Midnight' by @creator?" —
+attribution is why creators share; (2) one-tap links lit.ai/gems/t/<code>
+(static page, code in URL; opens app or shows gem preview + store
+button — the page IS the funnel); (3) drawn shapes turn themes into
+creator merch (mascot gems); (4) "play the daily in my theme" as the
+creator call-to-action that exercises everything at once.
