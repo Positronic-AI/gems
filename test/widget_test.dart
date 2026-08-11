@@ -59,4 +59,55 @@ void main() {
       }
     }
   });
+
+  group('streak math', () {
+    test('consecutive days increment', () {
+      final r = DailyGem.computeStreak(
+          prevDate: '2026-08-09', prevStreak: 4, passes: 0,
+          today: DateTime(2026, 8, 10));
+      expect(r.streak, 5);
+    });
+
+    test('one missed day with a Free Pass survives and burns it', () {
+      final r = DailyGem.computeStreak(
+          prevDate: '2026-08-08', prevStreak: 9, passes: 1,
+          today: DateTime(2026, 8, 10));
+      expect(r.streak, 10);
+      expect(r.passes, 0);
+    });
+
+    test('one missed day without a pass resets', () {
+      final r = DailyGem.computeStreak(
+          prevDate: '2026-08-08', prevStreak: 9, passes: 0,
+          today: DateTime(2026, 8, 10));
+      expect(r.streak, 1);
+    });
+
+    test('two missed days reset even with passes', () {
+      final r = DailyGem.computeStreak(
+          prevDate: '2026-08-06', prevStreak: 20, passes: 2,
+          today: DateTime(2026, 8, 10));
+      expect(r.streak, 1);
+    });
+
+    test('pass earned at 7-day multiples, banked to max 2', () {
+      final r7 = DailyGem.computeStreak(
+          prevDate: '2026-08-09', prevStreak: 6, passes: 0,
+          today: DateTime(2026, 8, 10));
+      expect(r7.streak, 7);
+      expect(r7.passes, 1);
+      final r14 = DailyGem.computeStreak(
+          prevDate: '2026-08-09', prevStreak: 13, passes: 2,
+          today: DateTime(2026, 8, 10));
+      expect(r14.streak, 14);
+      expect(r14.passes, 2); // capped
+    });
+
+    test('month boundary counts as consecutive', () {
+      final r = DailyGem.computeStreak(
+          prevDate: '2026-08-31', prevStreak: 3, passes: 0,
+          today: DateTime(2026, 9, 1));
+      expect(r.streak, 4);
+    });
+  });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main.dart' show routeObserver;
 import '../models/game_mode.dart';
 import '../services/daily_gem.dart';
 import '../widgets/starfield_background.dart';
@@ -11,20 +12,45 @@ class ModeSelectScreen extends StatefulWidget {
   State<ModeSelectScreen> createState() => _ModeSelectScreenState();
 }
 
-class _ModeSelectScreenState extends State<ModeSelectScreen> {
+class _ModeSelectScreenState extends State<ModeSelectScreen> with RouteAware {
   final _seedCtrl = TextEditingController();
   int? _dailyScore;
+  int _streak = 0;
 
   @override
   void initState() {
     super.initState();
+    _refreshDaily();
+  }
+
+  void _refreshDaily() {
     DailyGem.todayScore().then((v) {
       if (mounted) setState(() => _dailyScore = v);
+    });
+    DailyGem.currentStreak().then((v) {
+      if (mounted) setState(() => _streak = v);
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) routeObserver.subscribe(this, route);
+  }
+
+  /// Fires when a pushed screen pops back to us — the moment the card must
+  /// re-read daily state. (The old `await push` refresh resolved EARLY:
+  /// pushReplacement disposes the game route mid-flow, before the score is
+  /// recorded — a stale-widget race this replaces.)
+  @override
+  void didPopNext() {
+    _refreshDaily();
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _seedCtrl.dispose();
     super.dispose();
   }
@@ -162,8 +188,7 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
             ),
           ),
         );
-        final v = await DailyGem.todayScore();
-        if (mounted) setState(() => _dailyScore = v);
+        _refreshDaily();
       },
       child: Container(
         padding: const EdgeInsets.all(18),
@@ -189,7 +214,9 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Daily Gem — ${DailyGem.displayDate()}',
+                    _streak >= 1
+                        ? 'Daily Gem — ${DailyGem.displayDate()}  🔥$_streak'
+                        : 'Daily Gem — ${DailyGem.displayDate()}',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -199,8 +226,10 @@ class _ModeSelectScreenState extends State<ModeSelectScreen> {
                   const SizedBox(height: 3),
                   Text(
                     played
-                        ? 'Your score: $_dailyScore  ·  tap to practice'
-                        : 'Same board for everyone, once a day. 30 moves.',
+                        ? 'Your score: $_dailyScore · tap to practice'
+                        : _streak >= 1
+                            ? 'Play today to keep the flame alive · 30 moves'
+                            : 'Same board for everyone, once a day. 30 moves.',
                     style: TextStyle(
                       fontSize: 12.5,
                       color: Colors.white.withOpacity(0.85),

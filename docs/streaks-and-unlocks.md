@@ -24,7 +24,7 @@ locked items appear as silhouettes with their unlock condition:
 |-------:|--------|
 | 3 days | **Ocean palette** (cool blues/teals) |
 | 7 days | **Aurora palette** + first Free Pass |
-| 14 days | **Starfield theme variant** (warmer nebula) |
+| 14 days | **Custom Studio** — design your own gems: color picker + curated shape set (38), auto-derived glows, shareable GEMS1. theme codes |
 | 21 days | **Gem trail effect** (subtle swap sparkle) |
 | 30 days | **Golden gem set** + "Gem Master" title in share text |
 
@@ -48,5 +48,9 @@ every share is a small brag and an ad).
 
 - 2.5D tile polish (bevels, glints, shadows — pre-rendered sprite
   treatment; an art day, not an engine change). True 3D: no.
+- **Studio wing 2: drawn shapes** — a small pixel-art editor (~12x12
+  grid, stored as bitmap, rendered in place of icons). Theme codes are
+  versioned (GEMS1.) so drawn-shape payloads ride the same envelope.
+- Starfield theme variant (was the old 14-day rung; Studio took it).
 - Weekly Gem (spicier shared board, Mondays).
 - Local achievements; personal daily-score calendar.

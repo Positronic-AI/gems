@@ -3,6 +3,10 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/game_mode.dart';
 import '../services/leaderboard_service.dart';
+import '../services/daily_gem.dart';
+import '../models/gem.dart';
+import '../models/palette.dart';
+import 'palette_editor_screen.dart';
 import '../widgets/starfield_background.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -16,6 +20,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = 'Loading...';
   final LeaderboardService _leaderboardService = LeaderboardService();
   Map<GameModeType, List<LeaderboardEntry>> _leaderboards = {};
+  int _bestStreak = 0;
+  int _versionTaps = 0;
+  bool _showDebug = false;
+  int _curStreak = 0;
+  int _passes = 0;
+  String _selectedPalette = ActivePalette.current.id;
+  List<GemPalette> _palettes = [];
   bool _isLoading = true;
 
   @override
@@ -27,6 +38,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadData() async {
     await _loadAppInfo();
     await _loadLeaderboards();
+    _bestStreak = await DailyGem.bestStreak();
+    _curStreak = await DailyGem.currentStreak();
+    _passes = await DailyGem.freePasses();
+    _palettes = await ActivePalette.all();
     setState(() {
       _isLoading = false;
     });
@@ -99,11 +114,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               color: Colors.white,
                             ),
                           ),
-                          Text(
-                            'Version $_appVersion',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade400,
+                          GestureDetector(
+                            onTap: () {
+                              _versionTaps++;
+                              if (_versionTaps >= 7 && !_showDebug) {
+                                setState(() => _showDebug = true);
+                              }
+                            },
+                            child: Text(
+                              'Version $_appVersion',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade400,
+                              ),
                             ),
                           ),
                         ],
@@ -111,6 +134,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
 
                     const SizedBox(height: 32),
+
+                    if (_showDebug) ...[
+                      _buildSectionHeader('🛠 Time Machine (debug)'),
+                      _buildDebugCard(),
+                      const SizedBox(height: 24),
+                    ],
+
+                    // Palettes + the visible unlock ladder
+                    _buildSectionHeader('Gem Palettes'),
+                    ..._buildPaletteCards(),
+                    const SizedBox(height: 24),
 
                     // Leaderboards
                     _buildSectionHeader('Leaderboards'),
@@ -311,6 +345,174 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.month}/${date.day}';
+  }
+
+  Widget _buildDebugCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Simulated today: ${DailyGem.dateKey()} (offset ${DailyGem.debugDayOffset >= 0 ? '+' : ''}${DailyGem.debugDayOffset}d)\n'
+            'Streak: $_curStreak · Best: $_bestStreak · Free Passes: $_passes\n'
+            'Seed today: ${DailyGem.seedFor()}',
+            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _debugBtn('+1 day', () async {
+                await DailyGem.setDebugOffset(DailyGem.debugDayOffset + 1);
+                await _reloadDebug();
+              }),
+              const SizedBox(width: 8),
+              _debugBtn('+2 days', () async {
+                await DailyGem.setDebugOffset(DailyGem.debugDayOffset + 2);
+                await _reloadDebug();
+              }),
+              const SizedBox(width: 8),
+              _debugBtn('Real time', () async {
+                await DailyGem.setDebugOffset(0);
+                await _reloadDebug();
+              }),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            _debugBtn('Best +7', () async {
+              await DailyGem.debugSetBestStreak(_bestStreak + 7);
+              await _reloadDebug();
+              _palettes = await ActivePalette.all();
+              if (mounted) setState(() {});
+            }),
+          ]),
+          const SizedBox(height: 8),
+          _debugBtn('💣 Reset ALL daily data (fresh player)', () async {
+            await DailyGem.resetAll();
+            await _reloadDebug();
+          }),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _reloadDebug() async {
+    _bestStreak = await DailyGem.bestStreak();
+    _curStreak = await DailyGem.currentStreak();
+    _passes = await DailyGem.freePasses();
+    _palettes = await ActivePalette.all();
+    if (mounted) setState(() {});
+  }
+
+  Widget _debugBtn(String label, VoidCallback onTap) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.redAccent,
+        side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 12)),
+    );
+  }
+
+  Future<void> _openStudio() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PaletteEditorScreen()),
+    );
+    await ActivePalette.refreshIfCustom();
+    _palettes = await ActivePalette.all();
+    if (mounted) setState(() {});
+  }
+
+  List<Widget> _buildPaletteCards() {
+    return _palettes.map((p) {
+      final unlocked = p.unlockStreak <= _bestStreak;
+      final selected = p.id == _selectedPalette;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? Colors.amber
+                : Colors.white.withOpacity(0.15),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: ListTile(
+          enabled: unlocked,
+          onTap: unlocked
+              ? () async {
+                  await ActivePalette.select(p);
+                  setState(() => _selectedPalette = p.id);
+                }
+              : null,
+          title: Row(
+            children: [
+              Text(
+                p.name,
+                style: TextStyle(
+                  color: unlocked ? Colors.white : Colors.white38,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Swatch strip — the ladder preview IS the reward preview
+              ...GemType.values.take(6).map((t) => Container(
+                    width: 14,
+                    height: 14,
+                    margin: const EdgeInsets.only(right: 3),
+                    decoration: BoxDecoration(
+                      color: unlocked
+                          ? p.colorOf(t)
+                          : p.colorOf(t).withOpacity(0.25),
+                      shape: BoxShape.circle,
+                    ),
+                  )),
+            ],
+          ),
+          subtitle: !unlocked
+              ? Text(
+                  p.id == 'custom'
+                      ? '🔒 Custom Studio — design your own gems · unlocks at ${p.unlockStreak}-day streak'
+                      : '🔒 Unlocks at ${p.unlockStreak}-day streak',
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                )
+              : (p.id == 'custom'
+                  ? const Text('Your design · tap ✏️ to edit',
+                      style: TextStyle(color: Colors.white54, fontSize: 12))
+                  : p.id == 'colorblind'
+                      ? const Text('Colorblind-friendly · free for everyone',
+                          style: TextStyle(color: Colors.white54, fontSize: 12))
+                      : null),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (p.id == 'custom' && unlocked)
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
+                  tooltip: 'Open Studio',
+                  onPressed: _openStudio,
+                ),
+              if (selected)
+                const Icon(Icons.check_circle, color: Colors.amber)
+              else if (!unlocked)
+                const Icon(Icons.lock, color: Colors.white24, size: 18),
+            ],
+          ),
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildSectionHeader(String title) {

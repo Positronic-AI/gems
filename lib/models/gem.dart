@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'palette.dart';
 import 'dart:math';
 
 enum PowerUpType {
@@ -20,45 +21,14 @@ enum GemType {
 }
 
 extension GemTypeExtension on GemType {
-  Color get color {
-    switch (this) {
-      case GemType.red:
-        return const Color(0xFFE53935);
-      case GemType.orange:
-        return const Color(0xFFFF9800);
-      case GemType.yellow:
-        return const Color(0xFFFFEB3B);
-      case GemType.green:
-        return const Color(0xFF4CAF50);
-      case GemType.blue:
-        return const Color(0xFF2196F3);
-      case GemType.purple:
-        return const Color(0xFF9C27B0);
-      case GemType.white:
-        return const Color(0xFFE0E0E0);
-    }
-  }
+  Color get color => ActivePalette.current.colorOf(this);
 
-  Color get glowColor {
-    switch (this) {
-      case GemType.red:
-        return const Color(0xFFFF5252);
-      case GemType.orange:
-        return const Color(0xFFFFB74D);
-      case GemType.yellow:
-        return const Color(0xFFFFF176);
-      case GemType.green:
-        return const Color(0xFF81C784);
-      case GemType.blue:
-        return const Color(0xFF64B5F6);
-      case GemType.purple:
-        return const Color(0xFFBA68C8);
-      case GemType.white:
-        return const Color(0xFFFFFFFF);
-    }
-  }
+  Color get glowColor => ActivePalette.current.glowOf(this);
 
-  IconData get icon {
+  IconData get icon =>
+      ActivePalette.current.icons?[this] ?? classicIcon;
+
+  IconData get classicIcon {
     switch (this) {
       case GemType.red:
         return Icons.favorite;

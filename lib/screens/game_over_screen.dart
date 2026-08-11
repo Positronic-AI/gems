@@ -189,10 +189,14 @@ class _GameOverScreenState extends State<GameOverScreen>
   }
 
   bool _dailyCounted = false;
+  int _streak = 0;
+  int _bestStreak = 0;
 
   Future<void> _saveScore() async {
     if (widget.isDaily) {
       _dailyCounted = await DailyGem.recordScore(widget.score);
+      _streak = await DailyGem.currentStreak();
+      _bestStreak = await DailyGem.bestStreak();
     }
     // Save score
     _newRank = await _leaderboardService.addScore(
@@ -346,7 +350,11 @@ class _GameOverScreenState extends State<GameOverScreen>
                       _buildButton(
                         'Share score',
                         Colors.amber,
-                        () => Share.share(DailyGem.shareText(widget.score)),
+                        () => Share.share(DailyGem.shareText(
+                          widget.score,
+                          streak: _streak,
+                          title: _bestStreak >= 30 ? '👑 Gem Master' : null,
+                        )),
                       ),
                       if (!_dailyCounted)
                         Padding(
