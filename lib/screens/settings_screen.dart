@@ -144,6 +144,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // Palettes + the visible unlock ladder
                     _buildSectionHeader('Gem Palettes'),
                     ..._buildPaletteCards(),
+                    _buildStudioRow(),
                     const SizedBox(height: 24),
 
                     // Leaderboards
@@ -433,6 +434,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() {});
   }
 
+  Widget _buildStudioRow() {
+    final unlocked = ThemeLibrary.unlockStreak <= _bestStreak;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.amber.withOpacity(unlocked ? 0.5 : 0.15)),
+      ),
+      child: ListTile(
+        enabled: unlocked,
+        onTap: unlocked ? _openStudio : null,
+        leading: Icon(Icons.palette,
+            color: unlocked ? Colors.amber : Colors.white24),
+        title: Text('Custom Studio',
+            style: TextStyle(
+                color: unlocked ? Colors.white : Colors.white38,
+                fontWeight: FontWeight.bold)),
+        subtitle: Text(
+          unlocked
+              ? 'Design unlimited themes · share them with GEMS codes'
+              : '🔒 Design your own gems · unlocks at ${ThemeLibrary.unlockStreak}-day streak',
+          style: const TextStyle(color: Colors.white38, fontSize: 12),
+        ),
+        trailing: unlocked
+            ? const Icon(Icons.chevron_right, color: Colors.amber)
+            : const Icon(Icons.lock, color: Colors.white24, size: 18),
+      ),
+    );
+  }
+
   List<Widget> _buildPaletteCards() {
     return _palettes.map((p) {
       final unlocked = p.unlockStreak <= _bestStreak;
@@ -483,13 +515,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           subtitle: !unlocked
               ? Text(
-                  p.id == 'custom'
-                      ? '🔒 Custom Studio — design your own gems · unlocks at ${p.unlockStreak}-day streak'
-                      : '🔒 Unlocks at ${p.unlockStreak}-day streak',
+                  '🔒 Unlocks at ${p.unlockStreak}-day streak',
                   style: const TextStyle(color: Colors.white38, fontSize: 12),
                 )
-              : (p.id == 'custom'
-                  ? const Text('Your design · tap ✏️ to edit',
+              : (p.id.startsWith('user_')
+                  ? const Text('Custom theme · tap ✏️ for the Studio',
                       style: TextStyle(color: Colors.white54, fontSize: 12))
                   : p.id == 'colorblind'
                       ? const Text('Colorblind-friendly · free for everyone',
@@ -498,7 +528,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (p.id == 'custom' && unlocked)
+              if (p.id.startsWith('user_') && unlocked)
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.amber, size: 20),
                   tooltip: 'Open Studio',

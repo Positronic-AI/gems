@@ -85,100 +85,182 @@ Color deriveGlow(Color c) {
       .toColor();
 }
 
-/// The player's own palette (Custom Studio, 14-day unlock). Persisted as
-/// color values + shape indices in prefs; defaults to Classic's look.
-class CustomPalette {
-  static const unlockStreak = 14;
+/// Theme library (Custom Studio, one 14-day gate → unlimited themes).
+/// Every theme is attributed: name + author, carried in GEMS2 envelopes.
+/// Imports ADD to the library credited to their original creator.
+class UserTheme {
+  final String id;
+  String name;
+  String author;
+  List<int> colors; // 7, by GemType index
+  List<int> shapes; // 7, index into studioShapes, -1 = classic icon
 
-  static Future<GemPalette> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final colors = <GemType, Color>{};
-    final glows = <GemType, Color>{};
-    final icons = <GemType, IconData>{};
-    for (final t in GemType.values) {
-      final v = prefs.getInt('custom_color_${t.name}');
-      final c = v != null ? Color(v) : _classic.colorOf(t);
-      colors[t] = c;
-      glows[t] = deriveGlow(c);
-      final si = prefs.getInt('custom_shape_${t.name}');
-      icons[t] = (si != null && si >= 0 && si < studioShapes.length)
-          ? studioShapes[si]
+  UserTheme({
+    required this.id,
+    required this.name,
+    required this.author,
+    required this.colors,
+    required this.shapes,
+  });
+
+  Map<String, dynamic> toJson() =>
+      {'id': id, 'n': name, 'a': author, 'c': colors, 's': shapes};
+
+  static UserTheme fromJson(Map<String, dynamic> j) => UserTheme(
+        id: j['id'] as String,
+        name: (j['n'] ?? 'Theme') as String,
+        author: (j['a'] ?? '') as String,
+        colors: (j['c'] as List).cast<int>(),
+        shapes: (j['s'] as List).cast<int>(),
+      );
+
+  GemPalette toPalette() {
+    final colorMap = <GemType, Color>{};
+    final glowMap = <GemType, Color>{};
+    final iconMap = <GemType, IconData>{};
+    for (var i = 0; i < GemType.values.length; i++) {
+      final t = GemType.values[i];
+      final c = Color(colors[i]);
+      colorMap[t] = c;
+      glowMap[t] = deriveGlow(c);
+      iconMap[t] = (shapes[i] >= 0 && shapes[i] < studioShapes.length)
+          ? studioShapes[shapes[i]]
           : t.classicIcon;
     }
     return GemPalette(
-      id: 'custom',
-      name: 'My Palette',
-      unlockStreak: unlockStreak,
-      colors: colors,
-      glows: glows,
-      icons: icons,
+      id: 'user_$id',
+      name: name,
+      unlockStreak: ThemeLibrary.unlockStreak,
+      colors: colorMap,
+      glows: glowMap,
+      icons: iconMap,
     );
   }
+}
 
-  static Future<void> setColor(GemType t, Color c) async {
+class ThemeLibrary {
+  static const unlockStreak = 14;
+
+  static Future<List<UserTheme>> load() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('custom_color_${t.name}', c.value);
-  }
-
-  static Future<void> setShape(GemType t, int shapeIndex) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('custom_shape_${t.name}', shapeIndex);
-  }
-
-  /// Shareable theme code: GEMS1. + base64url of {"c":[7 colors],"s":[7
-  /// shape indices]}. Versioned so future payloads (drawn shapes) can ride
-  /// the same envelope. Sharing travels the OS share sheet — no network.
-  static Future<String> exportCode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final c = <int>[];
-    final sh = <int>[];
-    for (final t in GemType.values) {
-      c.add(prefs.getInt('custom_color_${t.name}') ??
-          _classic.colorOf(t).value);
-      sh.add(prefs.getInt('custom_shape_${t.name}') ?? -1);
-    }
-    final payload = jsonEncode({'c': c, 's': sh});
-    return 'GEMS1.${base64UrlEncode(utf8.encode(payload))}';
-  }
-
-  /// Returns null on success, or a human-readable error.
-  static Future<String?> importCode(String code) async {
+    await _migrateLegacy(prefs);
+    final raw = prefs.getString('themes_v1');
+    if (raw == null) return [];
     try {
-      // Codes arrive embedded in chat messages — extract from anywhere.
-      final m = RegExp(r'GEMS1\.[A-Za-z0-9_\-=]+').firstMatch(code);
-      if (m == null) {
-        return 'No Gems theme code found (looks like GEMS1.…)';
-      }
+      return (jsonDecode(raw) as List)
+          .map((e) => UserTheme.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> _migrateLegacy(SharedPreferences prefs) async {
+    if (prefs.getInt('custom_color_red') == null) return;
+    final colors = <int>[];
+    final shapes = <int>[];
+    for (final t in GemType.values) {
+      colors.add(prefs.getInt('custom_color_${t.name}') ??
+          _classic.colorOf(t).value);
+      shapes.add(prefs.getInt('custom_shape_${t.name}') ?? -1);
+      await prefs.remove('custom_color_${t.name}');
+      await prefs.remove('custom_shape_${t.name}');
+    }
+    final list = [
+      UserTheme(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: 'My Palette',
+        author: prefs.getString('theme_author') ?? '',
+        colors: colors,
+        shapes: shapes,
+      )
+    ];
+    await prefs.setString(
+        'themes_v1', jsonEncode(list.map((t) => t.toJson()).toList()));
+  }
+
+  static Future<void> saveAll(List<UserTheme> themes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        'themes_v1', jsonEncode(themes.map((t) => t.toJson()).toList()));
+  }
+
+  static Future<UserTheme> create({String? name}) async {
+    final themes = await load();
+    final author = await getAuthor();
+    final t = UserTheme(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: name ?? 'Theme ${themes.length + 1}',
+      author: author,
+      colors: [for (final t in GemType.values) _classic.colorOf(t).value],
+      shapes: List.filled(GemType.values.length, -1),
+    );
+    themes.add(t);
+    await saveAll(themes);
+    return t;
+  }
+
+  static Future<void> update(UserTheme theme) async {
+    final themes = await load();
+    final i = themes.indexWhere((t) => t.id == theme.id);
+    if (i >= 0) themes[i] = theme;
+    await saveAll(themes);
+  }
+
+  static Future<void> delete(String id) async {
+    final themes = await load();
+    themes.removeWhere((t) => t.id == id);
+    await saveAll(themes);
+  }
+
+  static Future<String> getAuthor() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('theme_author') ?? '';
+  }
+
+  static Future<void> setAuthor(String author) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_author', author.trim());
+  }
+
+  /// GEMS2 envelope: version, name, author, colors, shapes.
+  static String exportCode(UserTheme t) {
+    final payload = jsonEncode(
+        {'v': 2, 'n': t.name, 'a': t.author, 'c': t.colors, 's': t.shapes});
+    return 'GEMS2.${base64UrlEncode(utf8.encode(payload))}';
+  }
+
+  /// Import GEMS2 (attributed) or legacy GEMS1 codes from anywhere in the
+  /// pasted text. Adds a NEW library entry. Returns error or null.
+  static Future<String?> importCode(String text) async {
+    try {
+      final m = RegExp(r'GEMS[12]\.[A-Za-z0-9_\-=]+').firstMatch(text);
+      if (m == null) return 'No Gems theme code found (looks like GEMS2.…)';
+      final code = m.group(0)!;
       final payload = utf8.decode(
-          base64Url.decode(base64Url.normalize(m.group(0)!.substring(6))));
+          base64Url.decode(base64Url.normalize(code.substring(6))));
       final j = jsonDecode(payload) as Map<String, dynamic>;
       final c = (j['c'] as List).cast<int>();
       final sh = (j['s'] as List).cast<int>();
       if (c.length != GemType.values.length ||
           sh.length != GemType.values.length) {
-        return 'Theme code is for a different game version';
+        return 'Theme code is from a different game version';
       }
-      final prefs = await SharedPreferences.getInstance();
-      for (var i = 0; i < GemType.values.length; i++) {
-        final t = GemType.values[i];
-        await prefs.setInt('custom_color_${t.name}', c[i]);
-        if (sh[i] >= 0 && sh[i] < studioShapes.length) {
-          await prefs.setInt('custom_shape_${t.name}', sh[i]);
-        } else {
-          await prefs.remove('custom_shape_${t.name}');
-        }
-      }
+      final themes = await load();
+      themes.add(UserTheme(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: (j['n'] ?? 'Imported theme') as String,
+        author: (j['a'] ?? '') as String,
+        colors: c,
+        shapes: [
+          for (final v in sh)
+            (v >= 0 && v < studioShapes.length) ? v : -1
+        ],
+      ));
+      await saveAll(themes);
       return null;
     } catch (_) {
       return 'Could not read that code — was it pasted completely?';
-    }
-  }
-
-  static Future<void> reset() async {
-    final prefs = await SharedPreferences.getInstance();
-    for (final t in GemType.values) {
-      await prefs.remove('custom_color_${t.name}');
-      await prefs.remove('custom_shape_${t.name}');
     }
   }
 }
@@ -317,10 +399,10 @@ const List<GemPalette> builtinPalettes = [
 class ActivePalette {
   static GemPalette current = _classic;
 
-  /// Built-ins + the player's custom palette, in ladder order.
+  /// Built-ins + every library theme, in ladder order.
   static Future<List<GemPalette>> all() async {
-    final custom = await CustomPalette.load();
-    return [...builtinPalettes, custom];
+    final themes = await ThemeLibrary.load();
+    return [...builtinPalettes, ...themes.map((t) => t.toPalette())];
   }
 
   static Future<void> load() async {
@@ -336,10 +418,13 @@ class ActivePalette {
     await prefs.setString('palette', p.id);
   }
 
-  /// After Studio edits: if the custom palette is active, hot-reload it.
+  /// After Studio edits: if the active palette is a user theme, hot-reload
+  /// it (or fall back to Classic if it was deleted).
   static Future<void> refreshIfCustom() async {
-    if (current.id == 'custom') {
-      current = await CustomPalette.load();
+    if (current.id.startsWith('user_')) {
+      final palettes = await all();
+      current = palettes.firstWhere((p) => p.id == current.id,
+          orElse: () => builtinPalettes.first);
     }
   }
 }
