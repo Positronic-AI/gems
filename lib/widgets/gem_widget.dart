@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/gem.dart';
+import '../models/tile_style.dart';
 
 class GemWidget extends StatelessWidget {
   final Gem gem;
@@ -19,6 +20,7 @@ class GemWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = ActiveTileStyle.current;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -26,41 +28,155 @@ class GemWidget extends StatelessWidget {
         width: size,
         height: size,
         padding: EdgeInsets.all(size * 0.08),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: _buildGradient(),
-            borderRadius: BorderRadius.circular(size * 0.2),
-            border: isSelected
-                ? Border.all(color: Colors.white, width: 3)
-                : isHinted
-                    ? Border.all(color: Colors.yellow.withOpacity(0.8), width: 2)
-                    : gem.hasPowerUp
-                        ? Border.all(color: _getPowerUpGlowColor(), width: 3)
-                        : null,
-            boxShadow: [
-              if (gem.hasPowerUp)
-                BoxShadow(
-                  color: _getPowerUpGlowColor().withOpacity(0.7),
-                  blurRadius: 15,
-                  spreadRadius: 3,
-                ),
-              BoxShadow(
-                color: gem.type.glowColor.withOpacity(isSelected ? 0.8 : gem.hasPowerUp ? 0.6 : 0.4),
-                blurRadius: isSelected ? 15 : gem.hasPowerUp ? 12 : 8,
-                spreadRadius: isSelected ? 2 : gem.hasPowerUp ? 1 : 0,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 4,
-                offset: const Offset(2, 2),
-              ),
-            ],
+        child: style == TileStyle.wood ? _buildWoodTile() : _buildFlatOrGlassTile(style),
+      ),
+    );
+  }
+
+  Widget _buildFlatOrGlassTile(TileStyle style) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: _buildGradient(),
+        borderRadius: BorderRadius.circular(size * 0.2),
+        border: isSelected
+            ? Border.all(color: Colors.white, width: 3)
+            : isHinted
+                ? Border.all(color: Colors.yellow.withOpacity(0.8), width: 2)
+                : gem.hasPowerUp
+                    ? Border.all(color: _getPowerUpGlowColor(), width: 3)
+                    : null,
+        boxShadow: [
+          if (gem.hasPowerUp)
+            BoxShadow(
+              color: _getPowerUpGlowColor().withOpacity(0.7),
+              blurRadius: 15,
+              spreadRadius: 3,
+            ),
+          BoxShadow(
+            color: gem.type.glowColor.withOpacity(isSelected ? 0.8 : gem.hasPowerUp ? 0.6 : 0.4),
+            blurRadius: isSelected ? 15 : gem.hasPowerUp ? 12 : 8,
+            spreadRadius: isSelected ? 2 : gem.hasPowerUp ? 1 : 0,
           ),
-          child: Center(
-            child: _buildIcon(),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(2, 2),
+          ),
+        ],
+      ),
+      child: style == TileStyle.glass
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(size * 0.2),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.32),
+                            Colors.white.withOpacity(0.06),
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.18),
+                          ],
+                          stops: const [0.0, 0.25, 0.6, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: size * 0.14,
+                    top: size * 0.10,
+                    child: Container(
+                      width: size * 0.30,
+                      height: size * 0.18,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(size * 0.15),
+                        gradient: RadialGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.55),
+                            Colors.white.withOpacity(0.0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Center(child: _buildIcon()),
+                ],
+              ),
+            )
+          : Center(child: _buildIcon()),
+    );
+  }
+
+  /// Wood: a matte carved tile — warm grain face, darker extruded side
+  /// faces on the bottom and right (3D without 3D), NOTHING shiny. The
+  /// gem's color lives in the shape, Scrabble-tile style, so match
+  /// readability is untouched.
+  Widget _buildWoodTile() {
+    final ext = size * 0.10; // extrusion depth
+    const face = Color(0xFFD9B98C); // warm maple
+    const side = Color(0xFF8C6B44); // darker end-grain
+    final radius = BorderRadius.circular(size * 0.14);
+    return Stack(
+      children: [
+        // Extruded side block (bottom-right)
+        Positioned(
+          left: ext,
+          top: ext,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            decoration: BoxDecoration(
+              color: side,
+              borderRadius: radius,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 3,
+                  offset: const Offset(1.5, 1.5),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+        // Face
+        Positioned(
+          left: 0,
+          top: 0,
+          right: ext,
+          bottom: ext,
+          child: Container(
+            decoration: BoxDecoration(
+              color: face,
+              borderRadius: radius,
+              border: isSelected
+                  ? Border.all(color: Colors.white, width: 2.5)
+                  : isHinted
+                      ? Border.all(
+                          color: Colors.yellow.withOpacity(0.9), width: 2)
+                      : gem.hasPowerUp
+                          ? Border.all(
+                              color: _getPowerUpGlowColor(), width: 2.5)
+                          : Border.all(
+                              color: const Color(0xFFB89968), width: 1),
+            ),
+            child: ClipRRect(
+              borderRadius: radius,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(painter: WoodGrainPainter(face)),
+                  ),
+                  Center(child: _buildIcon()),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

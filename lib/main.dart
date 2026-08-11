@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'models/palette.dart';
+import 'models/tile_style.dart';
 import 'services/daily_gem.dart';
 import 'package:flutter/services.dart';
 import 'screens/home_screen.dart';
@@ -18,6 +19,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ActivePalette.load();
   await DailyGem.loadDebugOffset();
+  await ActiveTileStyle.load();
   runApp(const GemGame());
 }
 

@@ -6,6 +6,7 @@ import '../services/leaderboard_service.dart';
 import '../services/daily_gem.dart';
 import '../models/gem.dart';
 import '../models/palette.dart';
+import '../models/tile_style.dart';
 import 'palette_editor_screen.dart';
 import '../widgets/starfield_background.dart';
 
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _curStreak = 0;
   int _passes = 0;
   String _selectedPalette = ActivePalette.current.id;
+  TileStyle _tileStyle = ActiveTileStyle.current;
   List<GemPalette> _palettes = [];
   bool _isLoading = true;
 
@@ -142,6 +144,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
 
                     // Palettes + the visible unlock ladder
+                    _buildSectionHeader('Tile Style'),
+                    ..._buildTileStyleCards(),
+                    const SizedBox(height: 24),
+
                     _buildSectionHeader('Gem Palettes'),
                     ..._buildPaletteCards(),
                     _buildStudioRow(),
@@ -432,6 +438,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await ActivePalette.refreshIfCustom();
     _palettes = await ActivePalette.all();
     if (mounted) setState(() {});
+  }
+
+  List<Widget> _buildTileStyleCards() {
+    return TileStyle.values.map((st) {
+      final selected = st == _tileStyle;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? Colors.amber : Colors.white.withOpacity(0.15),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: ListTile(
+          onTap: () async {
+            await ActiveTileStyle.select(st);
+            setState(() => _tileStyle = st);
+          },
+          title: Text(st.displayName,
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold)),
+          subtitle: Text(st.description,
+              style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          trailing: selected
+              ? const Icon(Icons.check_circle, color: Colors.amber)
+              : null,
+        ),
+      );
+    }).toList();
   }
 
   Widget _buildStudioRow() {
