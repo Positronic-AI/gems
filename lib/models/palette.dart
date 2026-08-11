@@ -144,12 +144,13 @@ class CustomPalette {
   /// Returns null on success, or a human-readable error.
   static Future<String?> importCode(String code) async {
     try {
-      final trimmed = code.trim();
-      if (!trimmed.startsWith('GEMS1.')) {
-        return 'Not a Gems theme code (should start with GEMS1.)';
+      // Codes arrive embedded in chat messages — extract from anywhere.
+      final m = RegExp(r'GEMS1\.[A-Za-z0-9_\-=]+').firstMatch(code);
+      if (m == null) {
+        return 'No Gems theme code found (looks like GEMS1.…)';
       }
       final payload = utf8.decode(
-          base64Url.decode(base64Url.normalize(trimmed.substring(6))));
+          base64Url.decode(base64Url.normalize(m.group(0)!.substring(6))));
       final j = jsonDecode(payload) as Map<String, dynamic>;
       final c = (j['c'] as List).cast<int>();
       final sh = (j['s'] as List).cast<int>();
