@@ -267,6 +267,10 @@ class _GameScreenState extends State<GameScreen>
       _practice = true;
     }
 
+    _restoreLastSnapshot();
+  }
+
+  void _restoreLastSnapshot() {
     final snap = _history.removeLast();
     setState(() {
       _board.restoreGrid(snap.grid);
@@ -277,6 +281,36 @@ class _GameScreenState extends State<GameScreen>
       _showCelebration = false;
       _powerUpMessage = null;
     });
+  }
+
+  /// The peril: a dead board outside Zen ends the game. Offer the fork —
+  /// accept the "oh no" and see results, or take it back as practice.
+  Future<void> _onLockout() async {
+    if (_gameOver) return;
+    _timer?.cancel(); // clock stops while fate is decided
+
+    final takeBack = await showGeneralDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.75),
+      transitionDuration: const Duration(milliseconds: 450),
+      pageBuilder: (context, _, __) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim, _, __) {
+        final scale = CurvedAnimation(parent: anim, curve: Curves.elasticOut);
+        return ScaleTransition(
+          scale: scale,
+          child: _buildLockoutOverlay(context),
+        );
+      },
+    );
+
+    if (takeBack == true) {
+      _practice = true;
+      _restoreLastSnapshot();
+      if (_currentMode.type == GameModeType.timed) _startTimer();
+    } else {
+      _endGame(lockout: true);
+    }
   }
 
   void _onNoMoves() {
@@ -313,7 +347,7 @@ class _GameScreenState extends State<GameScreen>
     });
   }
 
-  void _endGame({bool won = false}) {
+  void _endGame({bool won = false, bool lockout = false}) {
     if (_gameOver) return;
     _gameOver = true;
     _timer?.cancel();
@@ -328,6 +362,7 @@ class _GameScreenState extends State<GameScreen>
           seed: _board.seed,
           isDaily: widget.isDaily,
           practice: _practice,
+          lockout: lockout,
           won: won,
           onPlayAgain: () {
             // Same seed: "play again" is a rematch on the same board.
@@ -493,6 +528,8 @@ class _GameScreenState extends State<GameScreen>
                     onPowerUp: _onPowerUp,
                     onMoveStarted: _onMoveStarted,
                     onBoardSettled: _onBoardSettled,
+                    endOnLockout: _currentMode.type != GameModeType.zen,
+                    onLockout: _onLockout,
                   ),
                 ),
               ),
@@ -782,6 +819,132 @@ class _GameScreenState extends State<GameScreen>
     );
   }
 
+
+  Widget _buildLockoutOverlay(BuildContext context) {
+    return Center(
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 32),
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.deepPurple.shade900.withOpacity(0.95),
+                Colors.black.withOpacity(0.95),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.redAccent.withOpacity(0.6), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.redAccent.withOpacity(0.4),
+                blurRadius: 40,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('\u{1F4A5}', style: TextStyle(fontSize: 56)),
+              const SizedBox(height: 8),
+              const Text(
+                'OH NO!',
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.redAccent,
+                  letterSpacing: 6,
+                  shadows: [
+                    Shadow(color: Colors.red, blurRadius: 24),
+                    Shadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 2)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'No more moves on the board',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white.withOpacity(0.85),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$_displayScore',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple.withOpacity(0.35),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(color: Colors.purple.withOpacity(0.6)),
+                    ),
+                  ),
+                  child: const Text(
+                    'See results',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              if (_history.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber.withOpacity(0.15),
+                      foregroundColor: Colors.amber,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(color: Colors.amber.withOpacity(0.5)),
+                      ),
+                    ),
+                    child: const Text(
+                      '\u21B6  Take it back (practice)',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// One undo step: everything a takeback must restore. The RNG stream is

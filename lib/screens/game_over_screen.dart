@@ -12,6 +12,7 @@ class GameOverScreen extends StatefulWidget {
   final int seed;
   final bool isDaily;
   final bool practice; // Undo was used — score is not recorded anywhere
+  final bool lockout; // Board ran out of moves — the "oh no" ending
   final bool won; // For target mode
   final VoidCallback onPlayAgain;
   final VoidCallback onMainMenu;
@@ -25,6 +26,7 @@ class GameOverScreen extends StatefulWidget {
     required this.seed,
     this.isDaily = false,
     this.practice = false,
+    this.lockout = false,
     this.won = false,
     required this.onPlayAgain,
     required this.onMainMenu,
@@ -268,7 +270,11 @@ class _GameOverScreenState extends State<GameOverScreen>
                   children: [
                     // Title
                     Text(
-                      isTargetWin ? 'LEVEL COMPLETE!' : 'GAME OVER',
+                      isTargetWin
+                          ? 'LEVEL COMPLETE!'
+                          : widget.lockout
+                              ? 'OUT OF MOVES!'
+                              : 'GAME OVER',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,

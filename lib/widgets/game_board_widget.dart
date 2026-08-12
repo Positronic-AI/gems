@@ -20,6 +20,13 @@ class GameBoardWidget extends StatefulWidget {
   /// (cascades done, shuffle-if-stuck done) — safe to recount moves / undo.
   final VoidCallback? onBoardSettled;
 
+  /// When true, a dead board after a move ENDS the game (onLockout) instead
+  /// of auto-shuffling — the peril. Zen keeps the shuffle. A dead board on
+  /// the initial deal or resize always shuffles regardless: death at move
+  /// zero is the RNG's fault, not the player's.
+  final bool endOnLockout;
+  final VoidCallback? onLockout;
+
   const GameBoardWidget({
     super.key,
     required this.board,
@@ -30,6 +37,8 @@ class GameBoardWidget extends StatefulWidget {
     this.onPowerUp,
     this.onMoveStarted,
     this.onBoardSettled,
+    this.endOnLockout = false,
+    this.onLockout,
   });
 
   @override
@@ -534,6 +543,11 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
 
     // Check for valid moves
     if (!widget.board.hasValidMoves()) {
+      if (widget.endOnLockout) {
+        widget.onBoardSettled?.call();
+        widget.onLockout?.call();
+        return;
+      }
       await _handleNoMoves();
     }
 
@@ -598,8 +612,14 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
       _animatingPositions.clear();
     });
 
-    // Check for valid moves - auto-shuffle if none
+    // Check for valid moves — the peril: dead board ends the game in
+    // scored modes; zen auto-shuffles.
     if (!widget.board.hasValidMoves()) {
+      if (widget.endOnLockout) {
+        widget.onBoardSettled?.call();
+        widget.onLockout?.call();
+        return;
+      }
       await _handleNoMoves();
     }
 
