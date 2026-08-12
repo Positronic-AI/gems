@@ -93,10 +93,16 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
     }
   }
 
+  /// Actual laid-out board edge, captured by the LayoutBuilder inside the
+  /// AspectRatio. NEVER derive this from screen width: the square board is
+  /// min(width, height), and on height-constrained screens (iPhones after
+  /// notch + safe areas) a width-based guess maps touches up-and-left of
+  /// the finger — worse toward the bottom-right corner.
+  double? _boardSide;
+
   double get _gemSize {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final boardWidth = screenWidth - 32; // padding
-    return boardWidth / widget.board.cols;
+    final side = _boardSide ?? (MediaQuery.of(context).size.width - 32);
+    return side / widget.board.cols;
   }
 
   @override
@@ -125,7 +131,9 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
         borderRadius: BorderRadius.circular(14),
         child: AspectRatio(
           aspectRatio: 1,
-          child: GestureDetector(
+          child: LayoutBuilder(builder: (context, constraints) {
+            _boardSide = constraints.maxWidth;
+            return GestureDetector(
             onScaleStart: _onScaleStart,
             onScaleUpdate: _onScaleUpdate,
             onScaleEnd: _onScaleEnd,
@@ -159,7 +167,8 @@ class _GameBoardWidgetState extends State<GameBoardWidget>
                   ),
               ],
             ),
-          ),
+          );
+          }),
         ),
       ),
     );
