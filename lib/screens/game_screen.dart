@@ -52,6 +52,7 @@ class _GameScreenState extends State<GameScreen>
   final List<_MoveSnapshot> _history = [];
   bool _practice = false;
   bool _moveInFlight = false;
+  bool _pendingTargetWin = false;
   static const int _maxHistory = 30;
 
   // Debug mode
@@ -178,10 +179,12 @@ class _GameScreenState extends State<GameScreen>
 
     _scoreAnimController.forward(from: 0);
 
-    // Check target mode win condition
+    // Target win is only FLAGGED here — ending mid-cascade discards the
+    // rest of the resolution (field report: a power-up earned on the
+    // winning move vanished). The settle callback ends the game.
     if (_currentMode.type == GameModeType.target &&
         _displayScore >= _currentMode.targetScore) {
-      _endGame(won: true);
+      _pendingTargetWin = true;
     }
   }
 
@@ -236,6 +239,10 @@ class _GameScreenState extends State<GameScreen>
       setState(() {
         _moveInFlight = false; // also refreshes the valid-move count
       });
+      if (_pendingTargetWin) {
+        _pendingTargetWin = false;
+        _endGame(won: true);
+      }
     }
   }
 
@@ -287,6 +294,13 @@ class _GameScreenState extends State<GameScreen>
   /// accept the "oh no" and see results, or take it back as practice.
   Future<void> _onLockout() async {
     if (_gameOver) return;
+    // Reached the target on the very move that killed the board: the win
+    // stands — never show "oh no" over a victory.
+    if (_pendingTargetWin) {
+      _pendingTargetWin = false;
+      _endGame(won: true);
+      return;
+    }
     _timer?.cancel(); // clock stops while fate is decided
 
     final takeBack = await showGeneralDialog<bool>(

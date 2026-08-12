@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/daily_gem.dart';
 import '../models/game_mode.dart';
 import '../services/leaderboard_service.dart';
@@ -94,9 +95,18 @@ class _GameOverScreenState extends State<GameOverScreen>
     );
 
     if (_isHighScore && widget.score > 0) {
-      // Show name entry dialog
-      if (mounted) {
+      // Ask for a name AT MOST ONCE EVER — after that the remembered name
+      // attributes scores silently (field report: the every-game initials
+      // dialog, shown before the results, was pure annoyance).
+      final prefs = await SharedPreferences.getInstance();
+      final savedName = prefs.getString('player_name') ?? '';
+      if (savedName.isNotEmpty) {
+        _playerName = savedName;
+      } else if (mounted) {
         await _showNameEntryDialog();
+        if (_playerName.isNotEmpty && _playerName != '???') {
+          await prefs.setString('player_name', _playerName);
+        }
       }
     }
 

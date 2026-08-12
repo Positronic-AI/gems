@@ -65,11 +65,15 @@ class GameMode {
         targetScore = 0,
         level = 0;
 
+  // Quadratic ramp: 3000, 5250, 8000, 11250, 15000… One good cascade with
+  // combos earns 1000-3000, so level 1 must cost several moves (field
+  // report: the old 1000 target fell to a single first move).
   const GameMode.target({this.level = 1})
       : type = GameModeType.target,
         timeSeconds = 0,
         maxMoves = 0,
-        targetScore = 1000 + (level - 1) * 500; // 1000, 1500, 2000, etc.
+        targetScore =
+            3000 + (level - 1) * 2000 + (level - 1) * (level - 1) * 250;
 
   const GameMode.zen()
       : type = GameModeType.zen,
